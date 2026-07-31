@@ -24,6 +24,7 @@ import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
 import { SnailTimer } from "./ui/snail-timer";
 import { AnimatedGradient } from "./ui/animated-gradient";
+import { UnifiedTimeWheelPicker, TimerMode } from "./ui/radial-time-picker";
 import {
   Dialog,
   DialogContent,
@@ -59,6 +60,20 @@ type View =
   | { kind: "projects" }
   | { kind: "project"; parent: FullParentTask }
   | { kind: "timer"; parent: FullParentTask; sub: SubTask };
+
+// Helper to format minutes to HH:MM
+const formatMinsToHHMM = (mins: number) => {
+  const h = Math.floor(mins / 60).toString().padStart(2, "0");
+  const m = (mins % 60).toString().padStart(2, "0");
+  return `${h}:${m}`;
+};
+
+// Helper to parse HH:MM to minutes
+const parseHHMMToMins = (hhmm: string) => {
+  const [h, m] = hhmm.split(":").map(Number);
+  if (isNaN(h) || isNaN(m)) return 0;
+  return h * 60 + m;
+};
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function formatDuration(seconds: number): string {
@@ -148,6 +163,8 @@ export default function FlowStateApp({
   // ─── Pomodoro State ──────────────────────────────────────────────────────
   const [pomodoroMode, setPomodoroMode] = useLocalStorage("fs_pomodoroMode", false);
   const [showSnail, setShowSnail] = useLocalStorage("fs_showSnail", true);
+  const [useProTimePicker, setUseProTimePicker] = useLocalStorage("fs_pro_time_picker", false);
+  const [activeProTab, setActiveProTab] = useState<TimerMode>("work");
   const [workDuration, setWorkDuration] = useLocalStorage("fs_workDuration", 25);
   const [shortBreakDuration, setShortBreakDuration] = useLocalStorage("fs_shortBreakDuration", 5);
   const [longBreakDuration, setLongBreakDuration] = useLocalStorage("fs_longBreakDuration", 15);
@@ -1015,7 +1032,7 @@ export default function FlowStateApp({
 
       {/* Settings */}
       <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
-        <DialogContent className="sm:max-w-md bg-card border-white/[0.08]">
+        <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto overflow-x-hidden bg-card border-white/[0.08]">
           <DialogHeader><DialogTitle>Settings</DialogTitle></DialogHeader>
           <div className="flex flex-col gap-6 mt-4">
             
@@ -1032,23 +1049,84 @@ export default function FlowStateApp({
               </h4>
               
               {pomodoroMode && (
-                <div className="grid grid-cols-2 gap-3 mt-3 animate-in fade-in slide-in-from-top-2">
-                  <div>
-                    <label className="text-[10px] uppercase tracking-wider text-muted-foreground/60 mb-1.5 block">Work (min)</label>
-                    <Input type="number" value={workDuration} onChange={(e) => setWorkDuration(Number(e.target.value))} className="h-8 text-sm bg-white/[0.02]" />
+                <div className="mt-4 flex items-center justify-between">
+                  <span className="text-sm font-medium">Use Pro Time Pickers</span>
+                  <div 
+                    onClick={() => setUseProTimePicker(!useProTimePicker)}
+                    className={`w-9 h-5 rounded-full flex items-center px-0.5 cursor-pointer transition-colors ${useProTimePicker ? 'bg-primary/80' : 'bg-white/[0.1]'}`}
+                  >
+                    <div className={`w-4 h-4 rounded-full bg-white transition-transform ${useProTimePicker ? 'translate-x-4' : ''}`} />
                   </div>
-                  <div>
-                    <label className="text-[10px] uppercase tracking-wider text-muted-foreground/60 mb-1.5 block">Short Break (min)</label>
-                    <Input type="number" value={shortBreakDuration} onChange={(e) => setShortBreakDuration(Number(e.target.value))} className="h-8 text-sm bg-white/[0.02]" />
-                  </div>
-                  <div>
-                    <label className="text-[10px] uppercase tracking-wider text-muted-foreground/60 mb-1.5 block">Long Break (min)</label>
-                    <Input type="number" value={longBreakDuration} onChange={(e) => setLongBreakDuration(Number(e.target.value))} className="h-8 text-sm bg-white/[0.02]" />
-                  </div>
-                  <div>
-                    <label className="text-[10px] uppercase tracking-wider text-muted-foreground/60 mb-1.5 block">Cycles before Long Break</label>
-                    <Input type="number" value={sessionsBeforeLongBreak} onChange={(e) => setSessionsBeforeLongBreak(Number(e.target.value))} className="h-8 text-sm bg-white/[0.02]" />
-                  </div>
+                </div>
+              )}
+
+              {pomodoroMode && (
+                <div className="mt-3 animate-in fade-in slide-in-from-top-2">
+                  {!useProTimePicker ? (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[10px] uppercase tracking-wider text-muted-foreground/60 mb-1.5 block">Work (min)</label>
+                        <Input type="number" value={workDuration} onChange={(e) => setWorkDuration(Number(e.target.value))} className="h-8 text-sm bg-white/[0.02]" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] uppercase tracking-wider text-muted-foreground/60 mb-1.5 block">Short Break (min)</label>
+                        <Input type="number" value={shortBreakDuration} onChange={(e) => setShortBreakDuration(Number(e.target.value))} className="h-8 text-sm bg-white/[0.02]" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] uppercase tracking-wider text-muted-foreground/60 mb-1.5 block">Long Break (min)</label>
+                        <Input type="number" value={longBreakDuration} onChange={(e) => setLongBreakDuration(Number(e.target.value))} className="h-8 text-sm bg-white/[0.02]" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] uppercase tracking-wider text-muted-foreground/60 mb-1.5 block">Cycles before Long Break</label>
+                        <Input type="number" value={sessionsBeforeLongBreak} onChange={(e) => setSessionsBeforeLongBreak(Number(e.target.value))} className="h-8 text-sm bg-white/[0.02]" />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center mt-2 pb-4">
+                      {/* Tabs */}
+                      <div className="flex items-center gap-2 mb-6 bg-white/[0.02] p-1 rounded-lg w-full max-w-[320px]">
+                        <button 
+                          onClick={() => setActiveProTab("work")} 
+                          className={`flex-1 py-1.5 text-[11px] font-semibold uppercase tracking-wider rounded-md transition-colors ${activeProTab === "work" ? "bg-primary/20 text-primary" : "text-muted-foreground/60 hover:bg-white/[0.04]"}`}
+                        >
+                          Work
+                        </button>
+                        <button 
+                          onClick={() => setActiveProTab("short")} 
+                          className={`flex-1 py-1.5 text-[11px] font-semibold uppercase tracking-wider rounded-md transition-colors ${activeProTab === "short" ? "bg-blue-500/20 text-blue-400" : "text-muted-foreground/60 hover:bg-white/[0.04]"}`}
+                        >
+                          Short
+                        </button>
+                        <button 
+                          onClick={() => setActiveProTab("long")} 
+                          className={`flex-1 py-1.5 text-[11px] font-semibold uppercase tracking-wider rounded-md transition-colors ${activeProTab === "long" ? "bg-purple-500/20 text-purple-400" : "text-muted-foreground/60 hover:bg-white/[0.04]"}`}
+                        >
+                          Long
+                        </button>
+                      </div>
+
+                      {/* Active Picker */}
+                      <div className="flex justify-center items-center h-[300px] sm:h-[360px] w-full max-w-full">
+                        <div className="transform scale-[0.82] sm:scale-100 origin-center">
+                          <UnifiedTimeWheelPicker
+                            workDuration={workDuration}
+                            shortDuration={shortBreakDuration}
+                            longDuration={longBreakDuration}
+                            onWorkChange={setWorkDuration}
+                            onShortChange={setShortBreakDuration}
+                            onLongChange={setLongBreakDuration}
+                            activeMode={activeProTab}
+                            onActiveModeChange={setActiveProTab}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="w-full mt-8">
+                        <label className="text-[10px] uppercase tracking-wider text-muted-foreground/60 mb-1.5 block">Cycles before Long Break</label>
+                        <Input type="number" value={sessionsBeforeLongBreak} onChange={(e) => setSessionsBeforeLongBreak(Number(e.target.value))} className="h-8 text-sm bg-white/[0.02]" />
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
               
