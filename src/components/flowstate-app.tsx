@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useTransition } from "react";
+import { useState, useEffect, useCallback, useTransition, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { ParentTask, SubTask, Session } from "@prisma/client";
 import {
@@ -18,9 +18,11 @@ import {
   updateSessionTime,
   getSubTaskSessions,
 } from "@/lib/actions";
+import { useLocalStorage } from "@/hooks/use-local-storage";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
+import { SnailTimer } from "./ui/snail-timer";
 import {
   Dialog,
   DialogContent,
@@ -44,7 +46,8 @@ import {
   Settings,
   ChevronRight,
   X,
-  Check,
+  FastForward,
+  Pause,
 } from "lucide-react";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -61,7 +64,10 @@ function formatDuration(seconds: number): string {
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
   const s = Math.floor(seconds % 60);
-  return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+  if (h > 0) {
+    return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+  }
+  return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
 }
 
 function formatShort(seconds: number): string {
@@ -86,7 +92,31 @@ export default function FlowStateApp({
 
   const [tasks, setTasks] = useState(initialTasks);
   const [activeSessions, setActiveSessions] = useState(initialActiveSessions);
-  const [view, setView] = useState<View>({ kind: "projects" });
+  const [savedView, setSavedView] = useLocalStorage<{ kind: "projects" | "project" | "timer", parentId?: string, subId?: string }>("fs_savedView", { kind: "projects" });
+
+  const view: View = useMemo(() => {
+    if (savedView.kind === "project") {
+      const parent = tasks.find(t => t.id === savedView.parentId);
+      if (parent) return { kind: "project", parent };
+    } else if (savedView.kind === "timer") {
+      const parent = tasks.find(t => t.id === savedView.parentId);
+      if (parent) {
+        const sub = parent.subTasks.find(s => s.id === savedView.subId);
+        if (sub) return { kind: "timer", parent, sub };
+      }
+    }
+    return { kind: "projects" };
+  }, [savedView, tasks]);
+
+  const setView = useCallback((newView: View) => {
+    if (newView.kind === "projects") {
+      setSavedView({ kind: "projects" });
+    } else if (newView.kind === "project") {
+      setSavedView({ kind: "project", parentId: newView.parent.id });
+    } else if (newView.kind === "timer") {
+      setSavedView({ kind: "timer", parentId: newView.parent.id, subId: newView.sub.id });
+    }
+  }, [setSavedView]);
   const [subTaskHistory, setSubTaskHistory] = useState<Session[]>([]);
   const [currentTime, setCurrentTime] = useState(new Date());
 
@@ -114,14 +144,57 @@ export default function FlowStateApp({
   // Context menu
   const [contextMenu, setContextMenu] = useState<{ id: string; type: "project" | "subtask"; name: string; x: number; y: number } | null>(null);
 
+  // ─── Pomodoro State ──────────────────────────────────────────────────────
+  const [pomodoroMode, setPomodoroMode] = useLocalStorage("fs_pomodoroMode", false);
+  const [showSnail, setShowSnail] = useLocalStorage("fs_showSnail", true);
+  const [workDuration, setWorkDuration] = useLocalStorage("fs_workDuration", 25);
+  const [shortBreakDuration, setShortBreakDuration] = useLocalStorage("fs_shortBreakDuration", 5);
+  const [longBreakDuration, setLongBreakDuration] = useLocalStorage("fs_longBreakDuration", 15);
+  const [sessionsBeforeLongBreak, setSessionsBeforeLongBreak] = useLocalStorage("fs_sessionsBeforeLongBreak", 4);
+
+  const [pomodoroPhase, setPomodoroPhase] = useLocalStorage<"work" | "short_break" | "long_break">("fs_phase", "work");
+  const [pomodorosCompleted, setPomodorosCompleted] = useLocalStorage("fs_completed", 0);
+  const [breakStartTime, setBreakStartTime] = useLocalStorage<string | null>("fs_breakStart", null);
+  const [pomodoroAccumulated, setPomodoroAccumulated] = useLocalStorage("fs_accumulated", 0);
+  const [isPaused, setIsPaused] = useLocalStorage("fs_isPaused", false);
+
+  // ─── Audio & Notifications ───────────────────────────────────────────────
+  useEffect(() => {
+    if (typeof window !== "undefined" && "Notification" in window) {
+      if (Notification.permission !== "granted" && Notification.permission !== "denied") {
+        Notification.requestPermission();
+      }
+    }
+  }, []);
+
+  const playNotification = useCallback(() => {
+    try {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioContextClass) {
+        const ctx = new AudioContextClass();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(880, ctx.currentTime); // A5 note
+        gain.gain.setValueAtTime(0.1, ctx.currentTime);
+        osc.start();
+        gain.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + 1);
+        osc.stop(ctx.currentTime + 1);
+      }
+      
+      if ("Notification" in window && Notification.permission === "granted") {
+        new Notification("FlowState Timer", { body: "Your interval is complete!" });
+      }
+    } catch (e) {
+      console.warn("Could not play notification sound", e);
+    }
+  }, []);
+
   // ─── Effects ─────────────────────────────────────────────────────────────
   useEffect(() => { setTasks(initialTasks); }, [initialTasks]);
   useEffect(() => { setActiveSessions(initialActiveSessions); }, [initialActiveSessions]);
-
-  useEffect(() => {
-    const interval = setInterval(() => setCurrentTime(new Date()), 1000);
-    return () => clearInterval(interval);
-  }, []);
 
   useEffect(() => {
     if (view.kind === "timer") {
@@ -209,8 +282,13 @@ export default function FlowStateApp({
       setPendingSubTaskId(subTaskId);
       setConflictModalOpen(true);
     } else {
-      await startSession(subTaskId);
-      refresh();
+      if (pomodoroMode && pomodoroPhase !== "work") {
+        setBreakStartTime(new Date().toISOString());
+      } else {
+        await startSession(subTaskId);
+        setIsPaused(false);
+        refresh();
+      }
     }
   };
 
@@ -227,9 +305,50 @@ export default function FlowStateApp({
     refresh();
   };
 
-  const handleStopTimer = async (sessionId: string) => {
+  const handleStopTimer = async (sessionId: string, autoPomodoroTransition = false) => {
     await stopSession(sessionId);
+    
+    if (pomodoroMode) {
+      if (autoPomodoroTransition && pomodoroPhase === "work") {
+        const newCompleted = pomodorosCompleted + 1;
+        setPomodorosCompleted(newCompleted);
+        const isLongBreak = newCompleted % sessionsBeforeLongBreak === 0;
+        setPomodoroPhase(isLongBreak ? "long_break" : "short_break");
+        setBreakStartTime(new Date().toISOString());
+        setPomodoroAccumulated(0);
+        setIsPaused(false);
+        toast.success("Focus session complete! Time for a break.");
+      } else {
+        // Manual stop - reset to work phase just to be safe
+        setPomodoroPhase("work");
+        setBreakStartTime(null);
+        setPomodoroAccumulated(0);
+        setIsPaused(false);
+      }
+    }
     refresh();
+  };
+
+  const handlePauseTimer = async (sessionId: string) => {
+    const session = activeSessions.find(s => s.id === sessionId);
+    if (!session) return;
+    const elapsed = getLive(session.start_time);
+    await stopSession(sessionId);
+    setPomodoroAccumulated(prev => prev + elapsed);
+    setIsPaused(true);
+    refresh();
+  };
+
+  const handleResumeTimer = async (subTaskId: string) => {
+    setIsPaused(false);
+    await startSession(subTaskId);
+    refresh();
+  };
+
+  const skipBreak = () => {
+    setPomodoroPhase("work");
+    setBreakStartTime(null);
+    toast("Break skipped. Ready to focus!");
   };
 
   const handleEditSession = (session: Session) => {
@@ -251,8 +370,9 @@ export default function FlowStateApp({
   };
 
   // ─── Derived ─────────────────────────────────────────────────────────────
-  const getLive = (startTime: Date) =>
-    Math.max(0, Math.floor((currentTime.getTime() - new Date(startTime).getTime()) / 1000));
+  const getLive = useCallback((startTime: string | Date) => 
+    Math.max(0, Math.floor((currentTime.getTime() - new Date(startTime).getTime()) / 1000)),
+  [currentTime]);
 
   const activeForSub = (subId: string) => activeSessions.find((s) => s.sub_task_id === subId) ?? null;
 
@@ -261,6 +381,41 @@ export default function FlowStateApp({
     e.stopPropagation();
     setContextMenu({ id, type, name, x: e.clientX, y: e.clientY });
   };
+
+  // ─── Timer Interval ──────────────────────────────────────────────────────
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = new Date();
+      setCurrentTime(now);
+
+      if (pomodoroMode) {
+        if (pomodoroPhase === "work") {
+          const activeSession = activeSessions.find(s => true); // Any active session
+          if (activeSession) {
+            const elapsed = Math.floor((now.getTime() - new Date(activeSession.start_time).getTime()) / 1000);
+            if (elapsed + pomodoroAccumulated >= workDuration * 60) {
+              playNotification();
+              handleStopTimer(activeSession.id, true);
+            }
+          }
+        } else {
+          // Break phase
+          if (breakStartTime) {
+            const elapsed = Math.floor((now.getTime() - new Date(breakStartTime).getTime()) / 1000);
+            const target = (pomodoroPhase === "long_break" ? longBreakDuration : shortBreakDuration) * 60;
+            if (elapsed >= target) {
+              playNotification();
+              setPomodoroPhase("work");
+              setBreakStartTime(null);
+              toast("Break over! Ready to focus?");
+            }
+          }
+        }
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [pomodoroMode, pomodoroPhase, activeSessions, workDuration, shortBreakDuration, longBreakDuration, breakStartTime, playNotification]);
+
 
   // ─── Render ──────────────────────────────────────────────────────────────
   return (
@@ -529,33 +684,124 @@ export default function FlowStateApp({
         {/* ─── Timer View ─── */}
         {view.kind === "timer" && (() => {
           const activeSession = activeForSub(view.sub.id);
-          const isRunning = !!activeSession;
+          const isWorkRunning = !!activeSession;
+          const isBreakRunning = pomodoroMode && pomodoroPhase !== "work" && breakStartTime !== null;
+          const isRunning = isWorkRunning || isBreakRunning;
+
+          let displayTime = "00:00";
+          if (pomodoroMode) {
+            if (pomodoroPhase === "work") {
+              if (activeSession) {
+                const elapsed = getLive(activeSession.start_time);
+                const remaining = Math.max(0, workDuration * 60 - pomodoroAccumulated - elapsed);
+                displayTime = formatDuration(remaining);
+              } else if (isPaused) {
+                const remaining = Math.max(0, workDuration * 60 - pomodoroAccumulated);
+                displayTime = formatDuration(remaining);
+              } else {
+                displayTime = formatDuration(workDuration * 60);
+              }
+            } else {
+              const target = (pomodoroPhase === "long_break" ? longBreakDuration : shortBreakDuration) * 60;
+              if (breakStartTime) {
+                const elapsed = getLive(breakStartTime);
+                const remaining = Math.max(0, target - elapsed);
+                displayTime = formatDuration(remaining);
+              } else {
+                displayTime = formatDuration(target);
+              }
+            }
+          } else {
+            displayTime = activeSession ? formatDuration(getLive(activeSession.start_time)) : formatDuration(0);
+          }
+
           return (
             <div className="pt-6 md:pt-10">
+              {/* Pomodoro Indicator */}
+              {pomodoroMode && (
+                <div className="flex items-center justify-center mb-6">
+                  <div className={`px-4 py-1.5 rounded-full text-xs font-semibold tracking-wider uppercase border 
+                    ${pomodoroPhase === "work" ? "bg-primary/10 border-primary/20 text-primary" : 
+                      "bg-blue-500/10 border-blue-500/20 text-blue-400"}`}>
+                    {pomodoroPhase === "work" ? "Focus Session" : pomodoroPhase === "short_break" ? "Short Break" : "Long Break"}
+                    <span className="opacity-50 ml-2">Cycle {pomodorosCompleted % sessionsBeforeLongBreak + 1}/{sessionsBeforeLongBreak}</span>
+                  </div>
+                </div>
+              )}
+
               {/* Timer Hero */}
               <div className="flex flex-col items-center text-center mb-10 md:mb-14">
-                <div className={`timer-display mb-3 transition-colors duration-500 ${isRunning ? "text-primary text-glow" : "text-muted-foreground/20"}`}>
-                  {isRunning ? formatDuration(getLive(activeSession!.start_time)) : formatDuration(0)}
+                <div className={`timer-display mb-3 transition-colors duration-500 ${isRunning ? (pomodoroPhase === "work" ? "text-primary text-glow" : "text-blue-400 [text-shadow:0_0_30px_rgba(96,165,250,0.4)]") : "text-muted-foreground/20"}`}>
+                  {displayTime}
                 </div>
                 <p className="text-xs font-mono text-muted-foreground/35 mb-8 flex items-center gap-1.5">
                   <Clock className="w-3 h-3" />
                   {formatDuration(view.sub.total_cumulative_time)} total
                 </p>
-                {isRunning ? (
-                  <button
-                    onClick={() => handleStopTimer(activeSession!.id)}
-                    className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center hover:bg-red-500/20 transition-all duration-300 active:scale-95"
-                  >
-                    <Square className="w-6 h-6 md:w-7 md:h-7 text-red-400 fill-red-400" />
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => handleStartTimer(view.sub.id)}
-                    className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center hover:bg-primary/20 glow-primary transition-all duration-300 active:scale-95"
-                  >
-                    <Play className="w-6 h-6 md:w-7 md:h-7 text-primary fill-primary ml-0.5" />
-                  </button>
-                )}
+                
+                <div className="flex items-center gap-4">
+                  {isRunning ? (
+                    pomodoroPhase === "work" ? (
+                      <>
+                        <button
+                          onClick={() => handlePauseTimer(activeSession!.id)}
+                          className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center hover:bg-amber-500/20 transition-all duration-300 active:scale-95"
+                        >
+                          <Pause className="w-6 h-6 md:w-7 md:h-7 text-amber-400 fill-amber-400" />
+                        </button>
+                        <button
+                          onClick={() => handleStopTimer(activeSession!.id)}
+                          className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center hover:bg-red-500/20 transition-all duration-300 active:scale-95"
+                        >
+                          <Square className="w-6 h-6 md:w-7 md:h-7 text-red-400 fill-red-400" />
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        onClick={skipBreak}
+                        className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center hover:bg-blue-500/20 transition-all duration-300 active:scale-95"
+                      >
+                        <FastForward className="w-6 h-6 md:w-7 md:h-7 text-blue-400 fill-blue-400" />
+                      </button>
+                    )
+                  ) : (
+                    <button
+                      onClick={() => {
+                        if (isPaused) handleResumeTimer(view.sub.id);
+                        else handleStartTimer(view.sub.id);
+                      }}
+                      className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center hover:bg-primary/20 glow-primary transition-all duration-300 active:scale-95"
+                    >
+                      <Play className="w-6 h-6 md:w-7 md:h-7 text-primary fill-primary ml-0.5" />
+                    </button>
+                  )}
+                </div>
+                
+                {pomodoroMode && showSnail && (() => {
+                  let elapsed = 0;
+                  if (pomodoroPhase === "work") {
+                    if (activeSession) {
+                      elapsed = getLive(activeSession.start_time) + pomodoroAccumulated;
+                    } else if (isPaused) {
+                      elapsed = pomodoroAccumulated;
+                    }
+                  } else {
+                    if (breakStartTime) {
+                      elapsed = getLive(breakStartTime);
+                    }
+                  }
+                  return (
+                    <div className="w-full relative mt-8 mb-[-40px] h-[50px]">
+                      <SnailTimer
+                        key={`${pomodorosCompleted}-${pomodoroPhase}`}
+                        started={isRunning}
+                        initialSeconds={pomodoroPhase === "work" ? workDuration * 60 : (pomodoroPhase === "long_break" ? longBreakDuration * 60 : shortBreakDuration * 60)}
+                        elapsedSeconds={elapsed}
+                        isBreak={pomodoroPhase !== "work"}
+                      />
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Notes */}
@@ -574,8 +820,8 @@ export default function FlowStateApp({
                   <label className="text-[11px] font-semibold uppercase tracking-[0.15em] text-muted-foreground/40 mb-2 block px-1">Session Notes</label>
                   <Textarea
                     className="min-h-[120px] resize-none bg-white/[0.02] border-white/[0.06] text-sm leading-relaxed placeholder:text-muted-foreground/25 focus-visible:ring-primary/20 rounded-xl"
-                    placeholder={isRunning ? "What are you working on?" : "Start a session to add notes..."}
-                    disabled={!isRunning}
+                    placeholder={isWorkRunning ? "What are you working on?" : "Start a session to add notes..."}
+                    disabled={!isWorkRunning}
                     defaultValue={activeSession?.session_notes || ""}
                     key={`sn-${activeSession?.id || "none"}`}
                     onBlur={(e) => { if (activeSession) updateSessionNotes(activeSession.id, e.target.value); }}
@@ -747,29 +993,60 @@ export default function FlowStateApp({
         <DialogContent className="sm:max-w-md bg-card border-white/[0.08]">
           <DialogHeader><DialogTitle>Settings</DialogTitle></DialogHeader>
           <div className="flex flex-col gap-6 mt-4">
+            
+            {/* Pomodoro Settings */}
+            <div>
+              <h4 className="text-sm font-medium mb-3 flex items-center justify-between">
+                Pomodoro Timer
+                <div 
+                  onClick={() => setPomodoroMode(!pomodoroMode)}
+                  className={`w-9 h-5 rounded-full flex items-center px-0.5 cursor-pointer transition-colors ${pomodoroMode ? 'bg-primary/80' : 'bg-white/[0.1]'}`}
+                >
+                  <div className={`w-4 h-4 rounded-full bg-white transition-transform ${pomodoroMode ? 'translate-x-4' : ''}`} />
+                </div>
+              </h4>
+              
+              {pomodoroMode && (
+                <div className="grid grid-cols-2 gap-3 mt-3 animate-in fade-in slide-in-from-top-2">
+                  <div>
+                    <label className="text-[10px] uppercase tracking-wider text-muted-foreground/60 mb-1.5 block">Work (min)</label>
+                    <Input type="number" value={workDuration} onChange={(e) => setWorkDuration(Number(e.target.value))} className="h-8 text-sm bg-white/[0.02]" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] uppercase tracking-wider text-muted-foreground/60 mb-1.5 block">Short Break (min)</label>
+                    <Input type="number" value={shortBreakDuration} onChange={(e) => setShortBreakDuration(Number(e.target.value))} className="h-8 text-sm bg-white/[0.02]" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] uppercase tracking-wider text-muted-foreground/60 mb-1.5 block">Long Break (min)</label>
+                    <Input type="number" value={longBreakDuration} onChange={(e) => setLongBreakDuration(Number(e.target.value))} className="h-8 text-sm bg-white/[0.02]" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] uppercase tracking-wider text-muted-foreground/60 mb-1.5 block">Cycles before Long Break</label>
+                    <Input type="number" value={sessionsBeforeLongBreak} onChange={(e) => setSessionsBeforeLongBreak(Number(e.target.value))} className="h-8 text-sm bg-white/[0.02]" />
+                  </div>
+                </div>
+              )}
+              
+              {pomodoroMode && (
+                <div className="mt-4 flex items-center justify-between">
+                  <span className="text-sm font-medium">Show Snail Animation</span>
+                  <div 
+                    onClick={() => setShowSnail(!showSnail)}
+                    className={`w-9 h-5 rounded-full flex items-center px-0.5 cursor-pointer transition-colors ${showSnail ? 'bg-primary/80' : 'bg-white/[0.1]'}`}
+                  >
+                    <div className={`w-4 h-4 rounded-full bg-white transition-transform ${showSnail ? 'translate-x-4' : ''}`} />
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div>
               <h4 className="text-sm font-medium mb-1">About</h4>
               <p className="text-xs text-muted-foreground/50 leading-relaxed">
                 FlowState is a premium minimalist time tracker built for deep work. All data is stored locally on your device.
               </p>
             </div>
-            <div>
-              <h4 className="text-sm font-medium mb-2">Preferences</h4>
-              <div className="flex flex-col gap-3">
-                <div className="flex items-center justify-between rounded-lg bg-white/[0.02] border border-white/[0.06] px-4 py-3">
-                  <span className="text-sm">Confirm before deleting</span>
-                  <div className="w-9 h-5 rounded-full bg-primary/80 flex items-center px-0.5 cursor-pointer">
-                    <div className="w-4 h-4 rounded-full bg-white translate-x-4 transition-transform" />
-                  </div>
-                </div>
-                <div className="flex items-center justify-between rounded-lg bg-white/[0.02] border border-white/[0.06] px-4 py-3">
-                  <span className="text-sm">Show seconds in sidebar</span>
-                  <div className="w-9 h-5 rounded-full bg-white/[0.1] flex items-center px-0.5 cursor-pointer">
-                    <div className="w-4 h-4 rounded-full bg-white/60 transition-transform" />
-                  </div>
-                </div>
-              </div>
-            </div>
+            
             <div className="pt-2 border-t border-white/[0.06]">
               <p className="text-[11px] text-muted-foreground/30">FlowState v1.0 · Built with Next.js + Prisma</p>
             </div>

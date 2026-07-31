@@ -1,0 +1,111 @@
+.snail-timer {
+  position: relative;
+  width: 100%;
+  height: 50px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.snail-timer.is-paused .snail-timer__track,
+.snail-timer.is-paused .snail,
+.snail-timer.is-paused .left-eye,
+.snail-timer.is-paused .right-eye,
+.snail-timer.is-paused .snail-timer__dust {
+  animation-play-state: paused !important;
+}
+
+.snail-timer__track {
+  position: absolute;
+  bottom: 0;
+  display: flex;
+  align-items: flex-end;
+  animation-duration: var(--snail-move-duration);
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+  animation-delay: var(--snail-move-delay, 0s);
+  width: max-content;
+}
+
+.snail-timer__track--work {
+  animation-name: snail-move-work;
+}
+
+.snail-timer__track--break {
+  animation-name: snail-move-break;
+}
+
+.snail {
+  transform-origin: bottom center;
+  animation: snail-scale var(--snail-scale-duration) ease-in-out infinite;
+  z-index: 2;
+}
+
+.left-eye,
+.right-eye {
+  animation: snail-eye var(--snail-eye-duration) ease-in-out infinite;
+}
+
+.snail-timer__dust {
+  position: absolute;
+  right: -30px;
+  bottom: 5px;
+  animation: snail-dust-anim 0.8s ease-out infinite;
+  z-index: 1;
+}
+
+@keyframes snail-move-work {
+  from {
+    left: 100%;
+    transform: translateX(0);
+  }
+  to {
+    left: 0%;
+    transform: translateX(-100%);
+  }
+}
+
+@keyframes snail-move-break {
+  from {
+    left: 0%;
+    transform: translateX(-100%) scaleX(-1);
+  }
+  to {
+    left: 100%;
+    transform: translateX(0) scaleX(-1);
+  }
+}
+
+@keyframes snail-scale {
+  0% {
+    transform: scaleX(1) scaleY(1);
+  }
+  50% {
+    transform: scaleX(0.95) scaleY(1.02);
+  }
+  100% {
+    transform: scaleX(1) scaleY(1);
+  }
+}
+
+@keyframes snail-eye {
+  0% {
+    transform: translate(0);
+  }
+  50% {
+    transform: translate(3px, 0);
+  }
+  100% {
+    transform: translate(0);
+  }
+}
+
+@keyframes snail-dust-anim {
+  0% {
+    transform: translateX(0) scale(0.8);
+    opacity: 0.8;
+  }
+  100% {
+    transform: translateX(30px) scale(1.5);
+    opacity: 0;
+  }
+}
