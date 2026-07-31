@@ -4,6 +4,7 @@
   height: 50px;
   overflow: hidden;
   pointer-events: none;
+  container-type: inline-size;
 }
 
 .snail-timer.is-paused .snail-timer__track,
@@ -24,6 +25,7 @@
   animation-fill-mode: forwards;
   animation-delay: var(--snail-move-delay, 0s);
   width: max-content;
+  left: 0; /* Base position */
 }
 
 .snail-timer__track--work {
@@ -55,23 +57,19 @@
 
 @keyframes snail-move-work {
   from {
-    left: 100%;
-    transform: translateX(0);
+    transform: translateX(100cqw);
   }
   to {
-    left: 0%;
     transform: translateX(-100%);
   }
 }
 
 @keyframes snail-move-break {
   from {
-    left: 0%;
     transform: translateX(-100%) scaleX(-1);
   }
   to {
-    left: 100%;
-    transform: translateX(0) scaleX(-1);
+    transform: translateX(100cqw) scaleX(-1);
   }
 }
 

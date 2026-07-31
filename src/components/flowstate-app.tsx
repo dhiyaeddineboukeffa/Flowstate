@@ -23,6 +23,7 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
 import { SnailTimer } from "./ui/snail-timer";
+import { AnimatedGradient } from "./ui/animated-gradient";
 import {
   Dialog,
   DialogContent,
@@ -417,12 +418,36 @@ export default function FlowStateApp({
   }, [pomodoroMode, pomodoroPhase, activeSessions, workDuration, shortBreakDuration, longBreakDuration, breakStartTime, playNotification]);
 
 
-  // ─── Render ──────────────────────────────────────────────────────────────
+  const workGradientConfig = useMemo(() => ({
+    preset: "custom" as const,
+    color1: "#030014", // Very dark background
+    color2: "#150530", // Dark purple
+    color3: "#401060", // Subtle deep primary purple
+    speed: 0.8,        // Faster speed
+    distortion: 20,
+    scale: 0.8,
+  }), []);
+
+  const breakGradientConfig = useMemo(() => ({
+    preset: "custom" as const,
+    color1: "#000514", // Very dark background
+    color2: "#051530", // Dark blue
+    color3: "#103060", // Subtle deep break blue
+    speed: 0.8,        // Faster speed
+    distortion: 20,
+    scale: 0.8,
+  }), []);
+
   return (
-    <div className="relative min-h-[100dvh] w-full bg-background text-foreground">
-      {/* Ambient blobs */}
-      <div className="ambient-blob w-[500px] h-[500px] bg-primary/30 top-[-100px] left-[-100px]" />
-      <div className="ambient-blob w-[400px] h-[400px] bg-purple-500/20 bottom-[-50px] right-[-50px]" style={{ animationDelay: "-7s" }} />
+    <div className="relative min-h-[100dvh] w-full bg-transparent text-foreground isolate">
+      <AnimatedGradient 
+        config={workGradientConfig}
+        className={`fixed inset-0 z-[-1] transition-opacity duration-[5000ms] ease-in-out pointer-events-none ${pomodoroPhase === "work" ? "opacity-30" : "opacity-0"}`}
+      />
+      <AnimatedGradient 
+        config={breakGradientConfig}
+        className={`fixed inset-0 z-[-1] transition-opacity duration-[5000ms] ease-in-out pointer-events-none ${pomodoroPhase !== "work" ? "opacity-30" : "opacity-0"}`}
+      />
 
       {/* ═══════ Top Bar ═══════ */}
       <header className="sticky top-0 z-40 glass-surface">
