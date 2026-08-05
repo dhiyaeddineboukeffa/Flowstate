@@ -304,7 +304,7 @@ export const UnifiedTimeWheelPicker: React.FC<UnifiedTimePickerProps> = ({
             "text-purple-600 dark:text-purple-400"
           )}
         />
-        <div className="text-[10px] uppercase font-bold text-muted-foreground/40 text-center mt-0.5 tracking-widest">
+        <div className="text-xs uppercase font-bold text-muted-foreground/70 text-center mt-0.5 tracking-widest">
           {activeMode === 'work' ? 'Work' : activeMode === 'short' ? 'Short' : 'Long'}
         </div>
       </div>

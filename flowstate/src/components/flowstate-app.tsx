@@ -210,6 +210,7 @@ export default function FlowStateApp({
   const [selectedExistingTask, setSelectedExistingTask] = useState<{ parent: FullParentTask; sub: SubTask } | null>(null);
   const [intentFocused, setIntentFocused] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   // Compute matching subtasks for autocomplete
   const intentSuggestions = useMemo(() => {
@@ -433,21 +434,7 @@ export default function FlowStateApp({
     return () => window.removeEventListener("click", close);
   }, [contextMenu]);
 
-  // Keep view in sync with refreshed data
-  useEffect(() => {
-    if (view.kind === "project") {
-      const updated = tasks.find((t) => t.id === view.parent.id);
-      if (updated) setView({ kind: "project", parent: updated });
-      else setView({ kind: "projects" });
-    } else if (view.kind === "timer") {
-      const updatedParent = tasks.find((t) => t.id === view.parent.id);
-      if (!updatedParent) { setView({ kind: "projects" }); return; }
-      const updatedSub = updatedParent.subTasks.find((s) => s.id === view.sub.id);
-      if (!updatedSub) { setView({ kind: "project", parent: updatedParent }); return; }
-      setView({ kind: "timer", parent: updatedParent, sub: updatedSub });
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tasks]);
+
 
   // ─── Actions ─────────────────────────────────────────────────────────────
   const refresh = useCallback(() => { startTransition(() => { router.refresh(); }); }, [router]);
@@ -499,15 +486,20 @@ export default function FlowStateApp({
   };
 
   const handleStartTimer = async (subTaskId: string) => {
+    if (isProcessing) return;
+    setIsProcessing(true);
     if (activeSessions.length > 0) {
       setPendingSubTaskId(subTaskId);
       setConflictModalOpen(true);
+      setIsProcessing(false);
     } else {
       if (pomodoroMode && pomodoroPhase !== "work") {
         setBreakStartTime(new Date().toISOString());
+        setIsProcessing(false);
       } else {
         await startSession(subTaskId);
         setIsPaused(false);
+        setIsProcessing(false);
         refresh();
       }
     }
@@ -583,25 +575,19 @@ export default function FlowStateApp({
   };
 
   const handleStopTimer = async (sessionId: string, autoPomodoroTransition = false) => {
+    setIsProcessing(true);
     setIsPaused(false);
     await stopSession(sessionId);
     
     if (pomodoroMode) {
-      if (autoPomodoroTransition && pomodoroPhase === "work") {
-        const newCompleted = pomodorosCompleted + 1;
-        setPomodorosCompleted(newCompleted);
-        const isLongBreak = newCompleted % sessionsBeforeLongBreak === 0;
-        setPomodoroPhase(isLongBreak ? "long_break" : "short_break");
-        setBreakStartTime(new Date().toISOString());
-        setPomodoroAccumulated(0);
-        toast.success("Focus session complete! Time for a break.");
-      } else {
+      if (!autoPomodoroTransition) {
         // Manual stop - reset to work phase just to be safe
         setPomodoroPhase("work");
         setBreakStartTime(null);
         setPomodoroAccumulated(0);
       }
     }
+    setIsProcessing(false);
     refresh();
   };
 
@@ -698,6 +684,15 @@ export default function FlowStateApp({
                 
                 if (shouldStopAll) {
                   playNotification();
+                  
+                  const newCompleted = pomodorosCompleted + 1;
+                  setPomodorosCompleted(newCompleted);
+                  const isLongBreak = newCompleted % sessionsBeforeLongBreak === 0;
+                  setPomodoroPhase(isLongBreak ? "long_break" : "short_break");
+                  setBreakStartTime(new Date().toISOString());
+                  setPomodoroAccumulated(0);
+                  toast.success("Focus session complete! Time for a break.");
+                  
                   activeSessions.forEach(s => handleStopTimer(s.id, true));
                 }
               }
@@ -797,7 +792,7 @@ export default function FlowStateApp({
               </button>
               {view.kind !== "projects" && (
                 <>
-                  <ChevronRight className="w-3 h-3 text-muted-foreground/30" />
+                  <ChevronRight className="w-3 h-3 text-muted-foreground/70" />
                   <button
                     onClick={() => setView({ kind: "project", parent: view.parent })}
                     className={`truncate max-w-[120px] md:max-w-[200px] transition-colors ${view.kind === "project" ? "text-foreground font-medium" : "text-muted-foreground/60 hover:text-muted-foreground"}`}
@@ -808,7 +803,7 @@ export default function FlowStateApp({
               )}
               {view.kind === "timer" && (
                 <>
-                  <ChevronRight className="w-3 h-3 text-muted-foreground/30" />
+                  <ChevronRight className="w-3 h-3 text-muted-foreground/70" />
                   <span className="text-foreground font-medium truncate max-w-[120px] md:max-w-[200px]">
                     {view.sub.name}
                   </span>
@@ -827,7 +822,7 @@ export default function FlowStateApp({
             )}
             <button
               onClick={() => setSettingsOpen(true)}
-              className="p-2 rounded-lg hover:bg-white/[0.06] transition-colors"
+              className="p-2 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg hover:bg-white/[0.06] transition-colors"
             >
               <Settings className="w-4 h-4 text-muted-foreground" />
             </button>
@@ -857,8 +852,7 @@ export default function FlowStateApp({
                   }}
                   onFocus={() => setIntentFocused(true)}
                   onBlur={() => {
-                    // Delay to allow click on suggestion
-                    setTimeout(() => setIntentFocused(false), 200);
+                    setIntentFocused(false);
                   }}
                   onKeyDown={(e) => {
                     const showSuggestions = intentFocused && intentSuggestions.length > 0 && !selectedExistingTask;
@@ -891,7 +885,7 @@ export default function FlowStateApp({
                       setSelectedExistingTask(null);
                     }
                   }}
-                  className="w-full h-full text-xl sm:text-2xl bg-transparent border-none outline-none focus:outline-none focus:ring-0 placeholder:text-muted-foreground/30 text-white font-medium tracking-tight px-6"
+                  className="w-full h-full text-xl sm:text-2xl bg-transparent border-none outline-none focus-visible:ring-1 focus-visible:ring-primary/50 placeholder:text-muted-foreground/70 text-white font-medium tracking-tight px-6"
                 />
                 <button 
                   type="button"
@@ -916,7 +910,7 @@ export default function FlowStateApp({
               {intentFocused && intentSuggestions.length > 0 && !selectedExistingTask && (
                 <div className="absolute z-30 left-0 right-0 top-full mt-2 mx-4 sm:mx-6 rounded-2xl bg-[#0a0a0c]/95 backdrop-blur-xl border border-white/[0.08] shadow-2xl overflow-hidden">
                   <div className="px-3 py-2 border-b border-white/[0.04]">
-                    <p className="text-[10px] uppercase tracking-widest text-muted-foreground/40 font-semibold">Existing Tasks</p>
+                    <p className="text-xs uppercase tracking-widest text-muted-foreground/70 font-semibold">Existing Tasks</p>
                   </div>
                   {intentSuggestions.map((match, i) => (
                     <button
@@ -939,9 +933,9 @@ export default function FlowStateApp({
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-foreground truncate">{match.sub.name}</p>
-                        <p className="text-[11px] text-muted-foreground/40 truncate">{match.parent.name} · {formatShort(match.sub.total_cumulative_time)}</p>
+                        <p className="text-sm text-muted-foreground/70 truncate">{match.parent.name} · {formatShort(match.sub.total_cumulative_time)}</p>
                       </div>
-                      <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/20 shrink-0" />
+                      <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/70 shrink-0" />
                     </button>
                   ))}
                 </div>
@@ -956,7 +950,7 @@ export default function FlowStateApp({
                 </div>
                 <div>
                   <p className="text-lg font-bold tracking-tight text-foreground font-mono">{formatShort(todayTotalSeconds)}</p>
-                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground/40 font-medium">Today</p>
+                  <p className="text-xs uppercase tracking-widest text-muted-foreground/70 font-medium">Today</p>
                 </div>
               </div>
               <div className="w-px h-8 bg-white/[0.06]" />
@@ -966,7 +960,7 @@ export default function FlowStateApp({
                 </div>
                 <div>
                   <p className="text-lg font-bold tracking-tight text-foreground font-mono">{todaySessionCount}</p>
-                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground/40 font-medium">Sessions</p>
+                  <p className="text-xs uppercase tracking-widest text-muted-foreground/70 font-medium">Sessions</p>
                 </div>
               </div>
               <div className="w-px h-8 bg-white/[0.06]" />
@@ -976,7 +970,7 @@ export default function FlowStateApp({
                 </div>
                 <div>
                   <p className="text-lg font-bold tracking-tight text-foreground font-mono">{tasks.length}</p>
-                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground/40 font-medium">Projects</p>
+                  <p className="text-xs uppercase tracking-widest text-muted-foreground/70 font-medium">Projects</p>
                 </div>
               </div>
             </div>
@@ -1000,20 +994,20 @@ export default function FlowStateApp({
                   value={newParentName}
                   onChange={(e) => setNewParentName(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter") doAddProject(); if (e.key === "Escape") setShowAddProject(false); }}
-                  className="bg-transparent border-none focus-visible:ring-0 text-sm h-8 placeholder:text-muted-foreground/40"
+                  className="bg-transparent border-none focus-visible:ring-1 focus-visible:ring-primary/50 text-sm h-8 placeholder:text-muted-foreground/70"
                 />
                 <Button size="sm" onClick={doAddProject} className="h-8 rounded-lg px-4 text-xs shrink-0">Create</Button>
-                <button onClick={() => setShowAddProject(false)} className="p-1 rounded hover:bg-white/[0.06]"><X className="w-3.5 h-3.5 text-muted-foreground" /></button>
+                <button onClick={() => setShowAddProject(false)} className="p-2 min-w-[44px] min-h-[44px] flex items-center justify-center rounded hover:bg-white/[0.06]"><X className="w-3.5 h-3.5 text-muted-foreground" /></button>
               </div>
             )}
 
             {tasks.length === 0 && !showAddProject ? (
               <div className="flex flex-col items-center justify-center py-24 text-center">
                 <div className="w-20 h-20 rounded-3xl bg-white/[0.03] border border-white/[0.06] flex items-center justify-center mb-6">
-                  <FolderOpen className="w-8 h-8 text-muted-foreground/20" />
+                  <FolderOpen className="w-8 h-8 text-muted-foreground/70" />
                 </div>
                 <h3 className="text-lg font-semibold mb-2 text-foreground/70">No projects yet</h3>
-                <p className="text-sm text-muted-foreground/40 max-w-[280px]">Create your first project to start tracking time</p>
+                <p className="text-sm text-muted-foreground/70 max-w-[280px]">Create your first project to start tracking time</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -1044,12 +1038,12 @@ export default function FlowStateApp({
                         </div>
                         <button
                           onClick={(e) => { e.stopPropagation(); openContext(e, parent.id, "project", parent.name); }}
-                          className="p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-white/[0.06] transition-all"
+                          className="p-2 min-w-[44px] min-h-[44px] flex items-center justify-center rounded opacity-100 md:opacity-0 md:group-hover:opacity-100 hover:bg-white/[0.06] transition-all"
                         >
-                          <MoreHorizontal className="w-4 h-4 text-muted-foreground/50" />
+                          <MoreHorizontal className="w-4 h-4 text-muted-foreground/80" />
                         </button>
                       </div>
-                      <div className="flex items-center justify-between text-xs text-muted-foreground/50">
+                      <div className="flex items-center justify-between text-xs text-muted-foreground/80">
                         <span>{parent.subTasks.length} {parent.subTasks.length === 1 ? "task" : "tasks"}</span>
                         <span className="font-mono">{formatShort(parent.total_cumulative_time)}</span>
                       </div>
@@ -1073,17 +1067,17 @@ export default function FlowStateApp({
                 <Plus className="w-4 h-4" /> New Task
               </Button>
             </div>
-            <p className="text-sm text-muted-foreground/50 mb-6 font-mono">
+            <p className="text-sm text-muted-foreground/80 mb-6 font-mono">
               {formatShort(view.parent.total_cumulative_time)} tracked across {view.parent.subTasks.length} tasks
             </p>
 
             {/* Notes */}
             <div className="mb-6">
-              <label className="text-[11px] font-semibold uppercase tracking-[0.15em] text-muted-foreground/40 mb-2 block px-1">
+              <label className="text-sm font-semibold uppercase tracking-[0.15em] text-muted-foreground/70 mb-2 block px-1">
                 Project Notes
               </label>
               <Textarea
-                className="min-h-[100px] resize-none bg-white/[0.02] border-white/[0.06] text-sm leading-relaxed placeholder:text-muted-foreground/25 focus-visible:ring-primary/20 rounded-xl"
+                className="min-h-[100px] resize-none bg-white/[0.02] border-white/[0.06] text-sm leading-relaxed placeholder:text-muted-foreground/70 focus-visible:ring-primary/20 rounded-xl"
                 placeholder="Notes for this project..."
                 defaultValue={view.parent.general_notes || ""}
                 key={`pn-${view.parent.id}`}
@@ -1100,20 +1094,20 @@ export default function FlowStateApp({
                   value={newSubTaskName}
                   onChange={(e) => setNewSubTaskName(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter") doAddSubTask(view.parent.id); if (e.key === "Escape") setShowAddSubTask(false); }}
-                  className="bg-transparent border-none focus-visible:ring-0 text-sm h-8 placeholder:text-muted-foreground/40"
+                  className="bg-transparent border-none focus-visible:ring-1 focus-visible:ring-primary/50 text-sm h-8 placeholder:text-muted-foreground/70"
                 />
                 <Button size="sm" onClick={() => doAddSubTask(view.parent.id)} className="h-8 rounded-lg px-4 text-xs shrink-0">Create</Button>
-                <button onClick={() => setShowAddSubTask(false)} className="p-1 rounded hover:bg-white/[0.06]"><X className="w-3.5 h-3.5 text-muted-foreground" /></button>
+                <button onClick={() => setShowAddSubTask(false)} className="p-2 min-w-[44px] min-h-[44px] flex items-center justify-center rounded hover:bg-white/[0.06]"><X className="w-3.5 h-3.5 text-muted-foreground" /></button>
               </div>
             )}
 
             {view.parent.subTasks.length === 0 && !showAddSubTask ? (
               <div className="flex flex-col items-center justify-center py-20 text-center">
                 <div className="w-16 h-16 rounded-2xl bg-white/[0.03] border border-white/[0.06] flex items-center justify-center mb-5">
-                  <FileText className="w-6 h-6 text-muted-foreground/20" />
+                  <FileText className="w-6 h-6 text-muted-foreground/70" />
                 </div>
                 <h3 className="text-base font-semibold mb-1 text-foreground/70">No tasks yet</h3>
-                <p className="text-sm text-muted-foreground/40">Add a task to start tracking</p>
+                <p className="text-sm text-muted-foreground/70">Add a task to start tracking</p>
               </div>
             ) : (
               <div className="flex flex-col gap-2">
@@ -1150,14 +1144,14 @@ export default function FlowStateApp({
                       </div>
 
                       <div className="flex items-center gap-3 shrink-0">
-                        <span className="text-xs font-mono text-muted-foreground/40">{formatShort(sub.total_cumulative_time)}</span>
+                        <span className="text-xs font-mono text-muted-foreground/70">{formatShort(sub.total_cumulative_time)}</span>
                         <button
                           onClick={(e) => { e.stopPropagation(); openContext(e, sub.id, "subtask", sub.name); }}
-                          className="p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-white/[0.06] transition-all"
+                          className="p-2 min-w-[44px] min-h-[44px] flex items-center justify-center rounded opacity-100 md:opacity-0 md:group-hover:opacity-100 hover:bg-white/[0.06] transition-all"
                         >
-                          <MoreHorizontal className="w-4 h-4 text-muted-foreground/50" />
+                          <MoreHorizontal className="w-4 h-4 text-muted-foreground/80" />
                         </button>
-                        <ChevronRight className="w-4 h-4 text-muted-foreground/20" />
+                        <ChevronRight className="w-4 h-4 text-muted-foreground/70" />
                       </div>
                     </div>
                   );
@@ -1267,17 +1261,17 @@ export default function FlowStateApp({
                           cy={radius}
                         />
                       </svg>
-                      <div className={`timer-display ${isRunning ? (pomodoroPhase === "work" ? "text-primary text-glow" : "text-blue-400 [text-shadow:0_0_30px_rgba(96,165,250,0.4)]") : "text-muted-foreground/20"}`}>
+                      <div className={`timer-display ${isRunning ? (pomodoroPhase === "work" ? "text-primary text-glow" : "text-blue-400 [text-shadow:0_0_30px_rgba(96,165,250,0.4)]") : "text-muted-foreground/70"}`}>
                         {displayTime}
                       </div>
                     </div>
                   );
                 })() : (
-                  <div className={`timer-display mb-3 ${isRunning ? "text-primary text-glow" : "text-muted-foreground/20"}`}>
+                  <div className={`timer-display mb-3 ${isRunning ? "text-primary text-glow" : "text-muted-foreground/70"}`}>
                     {displayTime}
                   </div>
                 )}
-                <p className="text-xs font-mono text-muted-foreground/35 mb-8 flex items-center gap-1.5">
+                <p className="text-xs font-mono text-muted-foreground/70 mb-8 flex items-center gap-1.5">
                   <Clock className="w-3 h-3" />
                   {formatDuration(view.sub.total_cumulative_time)} total
                 </p>
@@ -1289,21 +1283,21 @@ export default function FlowStateApp({
                         {activeSession?.is_paused ? (
                           <button
                             onClick={() => handleResumeTimer(activeSession.id)}
-                            className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center hover:bg-primary/20 glow-primary"
+                            className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center hover:bg-primary/20 glow-primary transition-all duration-300 hover:scale-105 active:scale-95 hover:shadow-[0_0_20px_rgba(124,58,237,0.3)]"
                           >
                             <Play className="w-6 h-6 md:w-7 md:h-7 text-primary fill-primary ml-0.5" />
                           </button>
                         ) : (
                           <button
                             onClick={() => handlePauseTimer(activeSession!.id)}
-                            className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center hover:bg-amber-500/20"
+                            className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center hover:bg-amber-500/20 transition-all duration-300 hover:scale-105 active:scale-95 hover:shadow-[0_0_20px_rgba(245,158,11,0.3)]"
                           >
                             <Pause className="w-6 h-6 md:w-7 md:h-7 text-amber-400 fill-amber-400" />
                           </button>
                         )}
                         <button
                           onClick={() => handleStopTimer(activeSession!.id)}
-                          className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center hover:bg-red-500/20"
+                          className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center hover:bg-red-500/20 transition-all duration-300 hover:scale-105 active:scale-95 hover:shadow-[0_0_20px_rgba(239,68,68,0.3)]"
                         >
                           <Square className="w-6 h-6 md:w-7 md:h-7 text-red-400 fill-red-400" />
                         </button>
@@ -1311,7 +1305,7 @@ export default function FlowStateApp({
                     ) : (
                       <button
                         onClick={skipBreak}
-                        className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center hover:bg-blue-500/20"
+                        className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center hover:bg-blue-500/20 transition-all duration-300 hover:scale-105 active:scale-95 hover:shadow-[0_0_20px_rgba(59,130,246,0.3)]"
                       >
                         <FastForward className="w-6 h-6 md:w-7 md:h-7 text-blue-400 fill-blue-400" />
                       </button>
@@ -1322,7 +1316,7 @@ export default function FlowStateApp({
                         setIsPaused(false);
                         handleStartTimer(view.sub.id);
                       }}
-                      className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center hover:bg-primary/20 glow-primary"
+                      className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center hover:bg-primary/20 glow-primary transition-all duration-300 hover:scale-105 active:scale-95 hover:shadow-[0_0_20px_rgba(124,58,237,0.3)]"
                     >
                       <Play className="w-6 h-6 md:w-7 md:h-7 text-primary fill-primary ml-0.5" />
                     </button>
@@ -1345,7 +1339,7 @@ export default function FlowStateApp({
                   return (
                     <div className="w-full relative mt-8 mb-[-40px] h-[50px]">
                       <SnailTimer
-                        key={`${pomodorosCompleted}-${pomodoroPhase}`}
+                        key={`${pomodoroPhase}-${activeSessions.length > 0 ? activeSessions[0].id : 'stopped'}`}
                         started={isRunning}
                         initialSeconds={pomodoroPhase === "work" ? workDuration * 60 : (pomodoroPhase === "long_break" ? longBreakDuration * 60 : shortBreakDuration * 60)}
                         elapsedSeconds={elapsed}
@@ -1359,7 +1353,7 @@ export default function FlowStateApp({
               {/* Checklist & Session Notes */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-10">
                 <div>
-                  <label className="text-[11px] font-semibold uppercase tracking-[0.15em] text-muted-foreground/40 mb-2 block px-1 flex items-center gap-1.5">
+                  <label className="text-sm font-semibold uppercase tracking-[0.15em] text-muted-foreground/70 mb-2 block px-1 flex items-center gap-1.5">
                     <CheckSquare className="w-3 h-3" /> Checklist
                   </label>
                   <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] overflow-hidden">
@@ -1381,11 +1375,11 @@ export default function FlowStateApp({
                             </button>
                             <span className={cn(
                               "text-sm flex-1 transition-all duration-200",
-                              item.done ? "line-through text-muted-foreground/30" : "text-foreground/80"
+                              item.done ? "line-through text-muted-foreground/70" : "text-foreground/80"
                             )}>{item.text}</span>
                             <button
                               onClick={() => removeChecklistItem(item.id)}
-                              className="p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-red-500/10 transition-all"
+                              className="p-2 min-w-[44px] min-h-[44px] flex items-center justify-center rounded opacity-100 md:opacity-0 md:group-hover:opacity-100 hover:bg-red-500/10 transition-all"
                             >
                               <X className="w-3 h-3 text-red-400/50" />
                             </button>
@@ -1395,7 +1389,7 @@ export default function FlowStateApp({
                     )}
                     {/* Add item input */}
                     <div className="flex items-center gap-2 px-4 py-2.5">
-                      <Plus className="w-4 h-4 text-muted-foreground/25 shrink-0" />
+                      <Plus className="w-4 h-4 text-muted-foreground/70 shrink-0" />
                       <input
                         type="text"
                         value={newChecklistItem}
@@ -1404,7 +1398,7 @@ export default function FlowStateApp({
                           if (e.key === "Enter") addChecklistItem();
                         }}
                         placeholder="Add an item..."
-                        className="w-full bg-transparent border-none outline-none text-sm placeholder:text-muted-foreground/25 text-foreground/80"
+                        className="w-full bg-transparent border-none outline-none text-sm placeholder:text-muted-foreground/70 text-foreground/80"
                       />
                     </div>
                     {/* Progress */}
@@ -1417,21 +1411,21 @@ export default function FlowStateApp({
                           <div className="flex-1 h-1 rounded-full bg-white/[0.04] overflow-hidden">
                             <div className="h-full rounded-full bg-primary/60 transition-all duration-500" style={{ width: `${pct}%` }} />
                           </div>
-                          <span className="text-[10px] font-mono text-muted-foreground/30">{done}/{total}</span>
+                          <span className="text-xs font-mono text-muted-foreground/70">{done}/{total}</span>
                         </div>
                       );
                     })()}
                   </div>
                 </div>
                 <div>
-                  <label className="text-[11px] font-semibold uppercase tracking-[0.15em] text-muted-foreground/40 mb-2 block px-1 flex items-center gap-1.5">
+                  <label className="text-sm font-semibold uppercase tracking-[0.15em] text-muted-foreground/70 mb-2 block px-1 flex items-center gap-1.5">
                     <MessageSquare className="w-3 h-3" /> Session Journal
                   </label>
                   <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] overflow-hidden flex flex-col" style={{ minHeight: "120px" }}>
                     {/* Input at top */}
                     {isWorkRunning ? (
                       <div className="flex items-center gap-2 px-4 py-2.5 border-b border-white/[0.04]">
-                        <span className="text-[11px] font-mono text-primary/50 shrink-0">{new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false })}</span>
+                        <span className="text-sm font-mono text-primary/50 shrink-0">{new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false })}</span>
                         <input
                           type="text"
                           value={newJournalEntry}
@@ -1440,25 +1434,25 @@ export default function FlowStateApp({
                             if (e.key === "Enter") addJournalEntry();
                           }}
                           placeholder="What are you doing right now?"
-                          className="w-full bg-transparent border-none outline-none text-sm placeholder:text-muted-foreground/25 text-foreground/80"
+                          className="w-full bg-transparent border-none outline-none text-sm placeholder:text-muted-foreground/70 text-foreground/80"
                         />
                       </div>
                     ) : (
                       <div className="flex items-center justify-center px-4 py-3 border-b border-white/[0.04]">
-                        <p className="text-[11px] text-muted-foreground/25">Start a session to log thoughts</p>
+                        <p className="text-sm text-muted-foreground/70">Start a session to log thoughts</p>
                       </div>
                     )}
                     {/* Entries feed */}
                     <div className="flex-1 overflow-y-auto max-h-[200px]">
                       {currentJournal.length === 0 ? (
                         <div className="flex items-center justify-center py-6">
-                          <p className="text-xs text-muted-foreground/20">No entries yet</p>
+                          <p className="text-xs text-muted-foreground/70">No entries yet</p>
                         </div>
                       ) : (
                         <div className="flex flex-col">
                           {[...currentJournal].reverse().map((entry) => (
                             <div key={entry.id} className="flex items-start gap-2.5 px-4 py-2 border-b border-white/[0.02] last:border-b-0">
-                              <span className="text-[11px] font-mono text-primary/40 shrink-0 pt-0.5">{entry.time}</span>
+                              <span className="text-sm font-mono text-primary/40 shrink-0 pt-0.5">{entry.time}</span>
                               <span className="text-sm text-foreground/60 leading-relaxed">{entry.text}</span>
                             </div>
                           ))}
@@ -1471,13 +1465,13 @@ export default function FlowStateApp({
 
               {/* Session History */}
               <div>
-                <h3 className="text-sm font-semibold uppercase tracking-[0.15em] text-muted-foreground/40 mb-4">
+                <h3 className="text-sm font-semibold uppercase tracking-[0.15em] text-muted-foreground/70 mb-4">
                   Session History
                 </h3>
 
                 {subTaskHistory.length === 0 ? (
                   <div className="rounded-xl border border-white/[0.04] bg-white/[0.02] py-10 text-center">
-                    <p className="text-sm text-muted-foreground/30">No completed sessions yet</p>
+                    <p className="text-sm text-muted-foreground/70">No completed sessions yet</p>
                   </div>
                 ) : (
                   <>
@@ -1485,7 +1479,7 @@ export default function FlowStateApp({
                     <div className="hidden md:block rounded-xl border border-white/[0.04] overflow-hidden">
                       <table className="w-full text-sm">
                         <thead>
-                          <tr className="border-b border-white/[0.04] text-muted-foreground/35 text-[11px] uppercase tracking-wider">
+                          <tr className="border-b border-white/[0.04] text-muted-foreground/70 text-sm uppercase tracking-wider">
                             <th className="text-left px-4 py-3 font-medium">Date</th>
                             <th className="text-left px-4 py-3 font-medium">Start</th>
                             <th className="text-left px-4 py-3 font-medium">End</th>
@@ -1498,18 +1492,18 @@ export default function FlowStateApp({
                           {subTaskHistory.map((session) => (
                             <tr key={session.id} className="border-b border-white/[0.03] hover:bg-white/[0.02] transition-colors group">
                               <td className="px-4 py-3 text-muted-foreground/60">{new Date(session.start_time).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</td>
-                              <td className="px-4 py-3 font-mono text-xs text-muted-foreground/50">{new Date(session.start_time).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}</td>
-                              <td className="px-4 py-3 font-mono text-xs text-muted-foreground/50">{session.end_time ? new Date(session.end_time).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }) : "—"}</td>
-                              <td className="px-4 py-3 text-muted-foreground/40 max-w-[200px] truncate text-xs cursor-help" title={session.session_notes || ""}>{session.session_notes ? session.session_notes.split('\n')[0] + (session.session_notes.includes('\n') ? '...' : '') : "—"}</td>
+                              <td className="px-4 py-3 font-mono text-xs text-muted-foreground/80">{new Date(session.start_time).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}</td>
+                              <td className="px-4 py-3 font-mono text-xs text-muted-foreground/80">{session.end_time ? new Date(session.end_time).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }) : "—"}</td>
+                              <td className="px-4 py-3 text-muted-foreground/70 max-w-[200px] truncate text-xs cursor-help" title={session.session_notes || ""}>{session.session_notes ? session.session_notes.split('\n')[0] + (session.session_notes.includes('\n') ? '...' : '') : "—"}</td>
                               <td className="px-4 py-3 text-right font-mono text-xs text-foreground/70">{formatDuration(session.duration)}</td>
                               <td className="px-4 py-3 text-right">
-                                <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                                <div className="flex items-center justify-end gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-all">
                                   {session.end_time && (
-                                    <button onClick={() => handleEditSession(session)} className="p-1 rounded hover:bg-white/[0.06]">
-                                      <Pencil className="w-3 h-3 text-muted-foreground/40" />
+                                    <button onClick={() => handleEditSession(session)} className="p-2 min-w-[44px] min-h-[44px] flex items-center justify-center rounded hover:bg-white/[0.06]">
+                                      <Pencil className="w-3 h-3 text-muted-foreground/70" />
                                     </button>
                                   )}
-                                  <button onClick={() => setDeleteConfirm({ type: "session", id: session.id, name: "this session" })} className="p-1 rounded hover:bg-red-500/10">
+                                  <button onClick={() => setDeleteConfirm({ type: "session", id: session.id, name: "this session" })} className="p-2 min-w-[44px] min-h-[44px] flex items-center justify-center rounded hover:bg-red-500/10">
                                     <Trash2 className="w-3 h-3 text-red-400/50" />
                                   </button>
                                 </div>
@@ -1526,17 +1520,17 @@ export default function FlowStateApp({
                         <div key={session.id} className="rounded-xl border border-white/[0.04] bg-white/[0.02] px-4 py-3">
                           <div className="flex items-center justify-between">
                             <div>
-                              <p className="text-xs text-muted-foreground/45">
+                              <p className="text-xs text-muted-foreground/70">
                                 {new Date(session.start_time).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                                 {" · "}
                                 {new Date(session.start_time).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
                               </p>
-                              {session.session_notes && <p className="text-xs text-muted-foreground/30 mt-0.5 truncate max-w-[200px]" title={session.session_notes}>{session.session_notes.split('\n')[0] + (session.session_notes.includes('\n') ? '...' : '')}</p>}
+                              {session.session_notes && <p className="text-xs text-muted-foreground/70 mt-0.5 truncate max-w-[200px]" title={session.session_notes}>{session.session_notes.split('\n')[0] + (session.session_notes.includes('\n') ? '...' : '')}</p>}
                             </div>
                             <div className="flex items-center gap-2">
                               <span className="font-mono text-sm text-foreground/70">{formatDuration(session.duration)}</span>
-                              <button onClick={() => handleEditSession(session)} className="p-1 rounded hover:bg-white/[0.06]"><Pencil className="w-3 h-3 text-muted-foreground/30" /></button>
-                              <button onClick={() => setDeleteConfirm({ type: "session", id: session.id, name: "this session" })} className="p-1 rounded hover:bg-red-500/10"><Trash2 className="w-3 h-3 text-red-400/40" /></button>
+                              <button onClick={() => handleEditSession(session)} className="p-2 min-w-[44px] min-h-[44px] flex items-center justify-center rounded hover:bg-white/[0.06]"><Pencil className="w-3 h-3 text-muted-foreground/70" /></button>
+                              <button onClick={() => setDeleteConfirm({ type: "session", id: session.id, name: "this session" })} className="p-2 min-w-[44px] min-h-[44px] flex items-center justify-center rounded hover:bg-red-500/10"><Trash2 className="w-3 h-3 text-red-400/40" /></button>
                             </div>
                           </div>
                         </div>
@@ -1612,15 +1606,15 @@ export default function FlowStateApp({
           <DialogHeader><DialogTitle>Edit Session</DialogTitle></DialogHeader>
           <div className="flex flex-col gap-4 mt-4">
             <div>
-              <label className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/40 mb-1.5 block">Start Time</label>
+              <label className="text-sm font-medium uppercase tracking-wider text-muted-foreground/70 mb-1.5 block">Start Time</label>
               <Input type="datetime-local" value={editStartTime} onChange={(e) => setEditStartTime(e.target.value)} className="bg-white/[0.04] border-white/[0.08]" />
             </div>
             <div>
-              <label className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/40 mb-1.5 block">End Time</label>
+              <label className="text-sm font-medium uppercase tracking-wider text-muted-foreground/70 mb-1.5 block">End Time</label>
               <Input type="datetime-local" value={editEndTime} onChange={(e) => setEditEndTime(e.target.value)} className="bg-white/[0.04] border-white/[0.08]" />
             </div>
             <div>
-              <label className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/40 mb-1.5 block">Duration (seconds)</label>
+              <label className="text-sm font-medium uppercase tracking-wider text-muted-foreground/70 mb-1.5 block">Duration (seconds)</label>
               <Input type="number" value={editDurationStr} onChange={(e) => setEditDurationStr(e.target.value)} className="bg-white/[0.04] border-white/[0.08]" />
             </div>
             <Button onClick={submitEditSession} className="w-full h-11 mt-1">Save Changes</Button>
@@ -1663,19 +1657,19 @@ export default function FlowStateApp({
                   {!useProTimePicker ? (
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="text-[10px] uppercase tracking-wider text-muted-foreground/60 mb-1.5 block">Work (min)</label>
+                        <label className="text-xs uppercase tracking-wider text-muted-foreground/60 mb-1.5 block">Work (min)</label>
                         <Input type="number" value={workDuration} onChange={(e) => setWorkDuration(Number(e.target.value))} className="h-8 text-sm bg-white/[0.02]" />
                       </div>
                       <div>
-                        <label className="text-[10px] uppercase tracking-wider text-muted-foreground/60 mb-1.5 block">Short Break (min)</label>
+                        <label className="text-xs uppercase tracking-wider text-muted-foreground/60 mb-1.5 block">Short Break (min)</label>
                         <Input type="number" value={shortBreakDuration} onChange={(e) => setShortBreakDuration(Number(e.target.value))} className="h-8 text-sm bg-white/[0.02]" />
                       </div>
                       <div>
-                        <label className="text-[10px] uppercase tracking-wider text-muted-foreground/60 mb-1.5 block">Long Break (min)</label>
+                        <label className="text-xs uppercase tracking-wider text-muted-foreground/60 mb-1.5 block">Long Break (min)</label>
                         <Input type="number" value={longBreakDuration} onChange={(e) => setLongBreakDuration(Number(e.target.value))} className="h-8 text-sm bg-white/[0.02]" />
                       </div>
                       <div>
-                        <label className="text-[10px] uppercase tracking-wider text-muted-foreground/60 mb-1.5 block">Cycles before Long Break</label>
+                        <label className="text-xs uppercase tracking-wider text-muted-foreground/60 mb-1.5 block">Cycles before Long Break</label>
                         <Input type="number" value={sessionsBeforeLongBreak} onChange={(e) => setSessionsBeforeLongBreak(Number(e.target.value))} className="h-8 text-sm bg-white/[0.02]" />
                       </div>
                     </div>
@@ -1685,19 +1679,19 @@ export default function FlowStateApp({
                       <div className="flex items-center gap-2 mb-6 bg-white/[0.02] p-1 rounded-lg w-full max-w-[320px]">
                         <button 
                           onClick={() => setActiveProTab("work")} 
-                          className={`flex-1 py-1.5 text-[11px] font-semibold uppercase tracking-wider rounded-md transition-colors ${activeProTab === "work" ? "bg-primary/20 text-primary" : "text-muted-foreground/60 hover:bg-white/[0.04]"}`}
+                          className={`flex-1 py-1.5 text-sm font-semibold uppercase tracking-wider rounded-md transition-colors ${activeProTab === "work" ? "bg-primary/20 text-primary" : "text-muted-foreground/60 hover:bg-white/[0.04]"}`}
                         >
                           Work
                         </button>
                         <button 
                           onClick={() => setActiveProTab("short")} 
-                          className={`flex-1 py-1.5 text-[11px] font-semibold uppercase tracking-wider rounded-md transition-colors ${activeProTab === "short" ? "bg-blue-500/20 text-blue-400" : "text-muted-foreground/60 hover:bg-white/[0.04]"}`}
+                          className={`flex-1 py-1.5 text-sm font-semibold uppercase tracking-wider rounded-md transition-colors ${activeProTab === "short" ? "bg-blue-500/20 text-blue-400" : "text-muted-foreground/60 hover:bg-white/[0.04]"}`}
                         >
                           Short
                         </button>
                         <button 
                           onClick={() => setActiveProTab("long")} 
-                          className={`flex-1 py-1.5 text-[11px] font-semibold uppercase tracking-wider rounded-md transition-colors ${activeProTab === "long" ? "bg-purple-500/20 text-purple-400" : "text-muted-foreground/60 hover:bg-white/[0.04]"}`}
+                          className={`flex-1 py-1.5 text-sm font-semibold uppercase tracking-wider rounded-md transition-colors ${activeProTab === "long" ? "bg-purple-500/20 text-purple-400" : "text-muted-foreground/60 hover:bg-white/[0.04]"}`}
                         >
                           Long
                         </button>
@@ -1720,7 +1714,7 @@ export default function FlowStateApp({
                       </div>
 
                       <div className="w-full mt-8">
-                        <label className="text-[10px] uppercase tracking-wider text-muted-foreground/60 mb-1.5 block">Cycles before Long Break</label>
+                        <label className="text-xs uppercase tracking-wider text-muted-foreground/60 mb-1.5 block">Cycles before Long Break</label>
                         <Input type="number" value={sessionsBeforeLongBreak} onChange={(e) => setSessionsBeforeLongBreak(Number(e.target.value))} className="h-8 text-sm bg-white/[0.02]" />
                       </div>
                     </div>
@@ -1743,13 +1737,13 @@ export default function FlowStateApp({
 
             <div>
               <h4 className="text-sm font-medium mb-1">About</h4>
-              <p className="text-xs text-muted-foreground/50 leading-relaxed">
+              <p className="text-xs text-muted-foreground/80 leading-relaxed">
                 FlowState is a premium minimalist time tracker built for deep work. All data is stored locally on your device.
               </p>
             </div>
             
             <div className="pt-2 border-t border-white/[0.06]">
-              <p className="text-[11px] text-muted-foreground/30">FlowState v1.0 · Built with Next.js + Prisma</p>
+              <p className="text-sm text-muted-foreground/70">FlowState v1.0 · Built with Next.js + Prisma</p>
             </div>
           </div>
         </DialogContent>
