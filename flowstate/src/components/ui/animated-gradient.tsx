@@ -3,6 +3,7 @@
 import { useRef, useEffect, useMemo, useState, CSSProperties } from "react";
 import { cn } from "@/lib/utils";
 import { WebGLErrorBoundary, WebGLFallback } from "@/components/ui/animated-gradient-utils/webgl-error-boundary";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 type PatternShape = "Checks" | "Stripes" | "Edge";
 
@@ -164,6 +165,7 @@ export function AnimatedGradient({
     const frameIdRef = useRef<number | undefined>(undefined);
     const startTimeRef = useRef<number>(0);
 
+    const isMobile = useIsMobile();
     const [isMounted, setIsMounted] = useState(false);
     const [hasWebGLError, setHasWebGLError] = useState(false);
 
@@ -199,7 +201,7 @@ export function AnimatedGradient({
     }, [config]);
 
     useEffect(() => {
-        if (hasWebGLError) return;
+        if (hasWebGLError || isMobile) return;
 
         const canvas = canvasRef.current;
         const container = containerRef.current;
@@ -349,9 +351,9 @@ export function AnimatedGradient({
             setHasWebGLError(true);
             return;
         }
-    }, [hasWebGLError, isMounted, params]);
+    }, [hasWebGLError, isMounted, params, isMobile]);
 
-    if (hasWebGLError) {
+    if (hasWebGLError || isMobile) {
         return <WebGLFallback className={cn("absolute inset-0 overflow-hidden", className)} />;
     }
 

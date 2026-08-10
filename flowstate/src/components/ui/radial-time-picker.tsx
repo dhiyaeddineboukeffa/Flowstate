@@ -141,7 +141,7 @@ export const UnifiedTimeWheelPicker: React.FC<UnifiedTimePickerProps> = ({
   return (
     <div
       className={cn(
-        "relative flex items-center justify-center w-[360px] h-[360px] transition-all duration-300",
+        "relative flex items-center justify-center w-full max-w-[360px] aspect-square transition-all duration-300",
         showMenu ? "z-50" : "z-10",
         className
       )}
@@ -175,14 +175,14 @@ export const UnifiedTimeWheelPicker: React.FC<UnifiedTimePickerProps> = ({
 
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
         <AnimatePresence>
-          {showMenu && (
-              <motion.svg
-                initial={{ opacity: 0, scale: 0.8, rotate: -15 }}
+          <motion.svg
+            initial={{ opacity: 0, scale: 0.8, rotate: -15 }}
                 animate={{ opacity: 1, scale: 1, rotate: 0 }}
                 exit={{ opacity: 0, scale: 0.8, rotate: 15 }}
                 transition={{ type: 'spring' as const, stiffness: 400, damping: 25 }}
-                width={SVG_SIZE}
-                height={SVG_SIZE}
+                width="100%"
+                height="100%"
+                viewBox={`0 0 ${SVG_SIZE} ${SVG_SIZE}`}
                 className="drop-shadow-xl"
               >
                 {/* Subtle Inner Section Labels (Rotated to match curve) */}
@@ -269,7 +269,6 @@ export const UnifiedTimeWheelPicker: React.FC<UnifiedTimePickerProps> = ({
                 );
               })}
             </motion.svg>
-          )}
         </AnimatePresence>
       </div>
 

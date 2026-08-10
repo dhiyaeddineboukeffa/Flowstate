@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -12,6 +12,13 @@ export const metadata: Metadata = {
   description: "Premium minimalist time tracking for deep work",
 };
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+};
+
 import { Toaster } from "@/components/ui/sonner";
 
 export default function RootLayout({
@@ -21,9 +28,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${geistMono.variable} dark antialiased`} suppressHydrationWarning>
-      <body className="min-h-screen bg-background text-foreground" suppressHydrationWarning>
+      <body className="min-h-screen bg-background text-foreground transition-colors duration-300" suppressHydrationWarning>
         {children}
-        <Toaster theme="dark" />
+        <Toaster />
       </body>
     </html>
   );

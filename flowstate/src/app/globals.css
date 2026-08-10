@@ -37,6 +37,10 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  --color-surface-overlay: var(--surface-overlay);
+  --color-surface-overlay-hover: var(--surface-overlay-hover);
+  --color-surface-border: var(--surface-border);
+  --color-surface-text: var(--surface-text);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -46,41 +50,48 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-/* ===== Modern Dark Cinema palette (UI UX Pro Max) ===== */
-/* Deep #020203  Base #050506  Elevated #0a0a0c  Accent #7C3AED */
-
+/* ===== Light Theme (Premium Clean Glass) ===== */
 :root {
-  --background: #050506;
-  --foreground: #EDEDEF;
-  --card: #0a0a0c;
-  --card-foreground: #EDEDEF;
-  --popover: #0a0a0c;
-  --popover-foreground: #EDEDEF;
+  --background: #F8FAFC;
+  --foreground: #0F172A;
+  --card: #FFFFFF;
+  --card-foreground: #0F172A;
+  --popover: #FFFFFF;
+  --popover-foreground: #0F172A;
   --primary: #7C3AED;
   --primary-foreground: #FFFFFF;
-  --secondary: #1a1a1f;
-  --secondary-foreground: #EDEDEF;
-  --muted: #121215;
-  --muted-foreground: #8A8F98;
-  --accent: #1a1a1f;
-  --accent-foreground: #EDEDEF;
-  --destructive: #DC2626;
-  --border: rgba(255, 255, 255, 0.08);
-  --input: rgba(255, 255, 255, 0.08);
+  --secondary: #E2E8F0;
+  --secondary-foreground: #0F172A;
+  --muted: #F1F5F9;
+  --muted-foreground: #64748B;
+  --accent: #E2E8F0;
+  --accent-foreground: #0F172A;
+  --destructive: #EF4444;
+  --border: rgba(0, 0, 0, 0.08);
+  --input: rgba(0, 0, 0, 0.08);
   --ring: #7C3AED;
 
-  --sidebar: #020203;
-  --sidebar-foreground: #EDEDEF;
+  --sidebar: #F1F5F9;
+  --sidebar-foreground: #0F172A;
   --sidebar-primary: #7C3AED;
   --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #1a1a1f;
-  --sidebar-accent-foreground: #EDEDEF;
-  --sidebar-border: rgba(255, 255, 255, 0.06);
+  --sidebar-accent: #E2E8F0;
+  --sidebar-accent-foreground: #0F172A;
+  --sidebar-border: rgba(0, 0, 0, 0.06);
   --sidebar-ring: #7C3AED;
   --radius: 0.75rem;
+
+  /* Surface overlays — Premium Light Glass */
+  --surface-overlay: rgba(255, 255, 255, 0.95);
+  --surface-overlay-hover: rgba(255, 255, 255, 1);
+  --surface-border: rgba(0, 0, 0, 0.09);
+  --surface-text: #0F172A;
+  --intent-bg: rgba(255, 255, 255, 0.95);
+  --dropdown-bg: #FFFFFF;
+  --surface-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.08), 0 0 4px rgba(0,0,0,0.04);
 }
 
-/* dark class same as root for this app (always dark) */
+/* ===== Dark Theme ===== */
 .dark {
   --background: #050506;
   --foreground: #EDEDEF;
@@ -109,6 +120,15 @@
   --sidebar-accent-foreground: #EDEDEF;
   --sidebar-border: rgba(255, 255, 255, 0.06);
   --sidebar-ring: #7C3AED;
+
+  /* Surface overlays — dark variants */
+  --surface-overlay: rgba(255, 255, 255, 0.02);
+  --surface-overlay-hover: rgba(255, 255, 255, 0.06);
+  --surface-border: rgba(255, 255, 255, 0.06);
+  --surface-text: #FFFFFF;
+  --intent-bg: rgba(5, 5, 5, 0.6);
+  --dropdown-bg: rgba(10, 10, 12, 0.95);
+  --surface-shadow: none;
 }
 
 @layer base {
@@ -137,19 +157,26 @@
 
   /* Accent glow behind primary actions */
   .glow-primary {
+    box-shadow: 0 0 30px rgba(124, 58, 237, 0.4), 0 0 60px rgba(124, 58, 237, 0.15);
+  }
+  .dark .glow-primary {
     box-shadow: 0 0 40px rgba(124, 58, 237, 0.3), 0 0 80px rgba(124, 58, 237, 0.1);
   }
 
   .glow-primary-sm {
+    box-shadow: 0 0 15px rgba(124, 58, 237, 0.3);
+  }
+  .dark .glow-primary-sm {
     box-shadow: 0 0 20px rgba(124, 58, 237, 0.2);
   }
 
-  /* Glass card surface */
+  /* Glass card surface — theme-aware */
   .glass-surface {
-    background: rgba(10, 10, 12, 0.6);
+    background: var(--intent-bg);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
-    border: 1px solid rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--surface-border);
+    box-shadow: var(--surface-shadow);
   }
 
   /* Subtle text glow for active timers */
@@ -185,9 +212,13 @@
   }
 }
 
-/* ===== Custom Scrollbar (Modern Dark Cinema) ===== */
+/* ===== Custom Scrollbar (Theme-aware) ===== */
 * {
   scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
+}
+
+.dark * {
   scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
 }
 
@@ -202,13 +233,25 @@
 }
 
 *::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.15);
   border-radius: 4px;
   border: 2px solid transparent;
   background-clip: padding-box;
 }
 
+.dark *::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
 *::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.25);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.dark *::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.2);
   border: 2px solid transparent;
   background-clip: padding-box;
