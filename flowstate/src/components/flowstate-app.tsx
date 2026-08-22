@@ -23,6 +23,8 @@ import {
   toggleChecklistItem,
   deleteChecklistItem,
   logoutUser,
+  getUserPomodoroState,
+  updateUserPomodoroState,
 } from "@/lib/actions";
 import { cn } from "@/lib/utils";
 import { useLocalStorage } from "@/hooks/use-local-storage";
@@ -66,11 +68,12 @@ import {
   LogOut,
   Sun,
   Moon,
+  ArrowUpDown,
 } from "lucide-react";
 
-// ─── Types ───────────────────────────────────────────────────────────────────
-type FullParentTask = ParentTask & { subTasks: SubTask[]; checklists: ChecklistItem[] };
-type FullSession = Session & { subTask: SubTask & { parentTask: ParentTask } };
+type FullSubTask = SubTask & { checklists: ChecklistItem[] };
+type FullParentTask = ParentTask & { subTasks: FullSubTask[] };
+type FullSession = Session & { subTask: FullSubTask & { parentTask: ParentTask } };
 
 let sharedAudioContext: AudioContext | null = null;
 const getAudioContext = () => {
@@ -88,7 +91,7 @@ const getAudioContext = () => {
 type View =
   | { kind: "projects" }
   | { kind: "project"; parent: FullParentTask }
-  | { kind: "timer"; parent: FullParentTask; sub: SubTask };
+  | { kind: "timer"; parent: FullParentTask; sub: any };
 
 // Helper to format minutes to HH:MM
 const formatMinsToHHMM = (mins: number) => {
@@ -129,11 +132,13 @@ export default function FlowStateApp({
   initialTasks,
   initialActiveSessions,
   initialTodaySessions,
+  initialPomodoroState,
   username,
 }: {
   initialTasks: FullParentTask[];
   initialActiveSessions: FullSession[];
   initialTodaySessions: Session[];
+  initialPomodoroState?: any;
   username: string;
 }) {
   const router = useRouter();
@@ -238,16 +243,59 @@ export default function FlowStateApp({
 
   // ─── Checklist State ──────────────
   const [newChecklistItem, setNewChecklistItem] = useState("");
+  const [checklistSort, setChecklistSort] = useLocalStorage<"newest" | "oldest" | "status" | "status-oldest">("fs_checklist_sort", "newest");
 
   const currentChecklist = useMemo(() => {
     if (view.kind !== "timer") return [];
-    return view.parent.checklists || [];
-  }, [view]);
+    const list = [...(view.sub.checklists || [])];
+    
+    if (checklistSort === "newest") {
+      list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    } else if (checklistSort === "oldest") {
+      list.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    } else if (checklistSort === "status") {
+      list.sort((a, b) => {
+        if (a.done === b.done) {
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        }
+        return a.done ? 1 : -1;
+      });
+    } else if (checklistSort === "status-oldest") {
+      list.sort((a, b) => {
+        if (a.done === b.done) {
+          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+        }
+        return a.done ? 1 : -1;
+      });
+    }
+    return list;
+  }, [view, checklistSort]);
+
+  // ─── Recent Tasks ────────────────
+  const recentTasks = useMemo(() => {
+    const allSubTasks: { parent: FullParentTask; sub: FullSubTask }[] = [];
+    tasks.forEach(parent => {
+      parent.subTasks.forEach(sub => {
+        allSubTasks.push({ parent, sub });
+      });
+    });
+    return allSubTasks.sort((a, b) => new Date(b.sub.created_at).getTime() - new Date(a.sub.created_at).getTime()).slice(0, 4);
+  }, [tasks]);
 
   const addChecklistItem = async () => {
     if (!newChecklistItem.trim() || view.kind !== "timer") return;
-    await createChecklistItem(view.parent.id, newChecklistItem.trim());
+    const text = newChecklistItem.trim();
     setNewChecklistItem("");
+    
+    // Optimistic UI update (using a fake ID that will be replaced on refresh)
+    const fakeId = `temp-${Date.now()}`;
+    setTasks(prev => prev.map(p => 
+      p.id === view.parent.id 
+        ? { ...p, subTasks: p.subTasks.map(s => s.id === view.sub.id ? { ...s, checklists: [...(s.checklists || []), { id: fakeId, sub_task_id: s.id, text, done: false, created_at: new Date() }] } : s) } 
+        : p
+    ));
+
+    await createChecklistItem(view.sub.id, text);
     refresh();
   };
 
@@ -315,13 +363,53 @@ export default function FlowStateApp({
 
   const onToggleChecklistItem = async (itemId: string, currentDone: boolean) => {
     if (view.kind !== "timer") return;
-    if (!currentDone) playPing();
-    await toggleChecklistItem(itemId, !currentDone);
+    const isNowDone = !currentDone;
+    if (isNowDone) playPing();
+    
+    // Optimistic UI update
+    setTasks(prev => prev.map(p => 
+      p.id === view.parent.id 
+        ? { ...p, subTasks: p.subTasks.map(s => s.id === view.sub.id ? { ...s, checklists: s.checklists.map(c => c.id === itemId ? { ...c, done: isNowDone } : c) } : s) } 
+        : p
+    ));
+
+    // Auto-journal logic if marking as done
+    if (isNowDone && currentSessionId) {
+      const item = view.sub.checklists.find((c: ChecklistItem) => c.id === itemId);
+      if (item) {
+        const timeStr = new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false });
+        const textToLog = `Completed: ${item.text}`;
+        
+        // Optimistically update active sessions
+        let newNotesStr = "";
+        setActiveSessions(prev => prev.map(s => {
+          if (s.id === currentSessionId) {
+            const currentNotes = s.session_notes ? s.session_notes.trim() : "";
+            newNotesStr = currentNotes ? `${currentNotes}\n[${timeStr}] ${textToLog}` : `[${timeStr}] ${textToLog}`;
+            return { ...s, session_notes: newNotesStr };
+          }
+          return s;
+        }));
+        
+        // Fire-and-forget DB update
+        if (newNotesStr) updateSessionNotes(currentSessionId, newNotesStr);
+      }
+    }
+
+    await toggleChecklistItem(itemId, isNowDone);
     refresh();
   };
 
   const removeChecklistItem = async (itemId: string) => {
     if (view.kind !== "timer") return;
+
+    // Optimistic UI update
+    setTasks(prev => prev.map(p => 
+      p.id === view.parent.id 
+        ? { ...p, subTasks: p.subTasks.map(s => s.id === view.sub.id ? { ...s, checklists: s.checklists.filter(c => c.id !== itemId) } : s) } 
+        : p
+    ));
+
     await deleteChecklistItem(itemId);
     refresh();
   };
@@ -367,19 +455,77 @@ export default function FlowStateApp({
   };
 
   // ─── Pomodoro State ──────────────────────────────────────────────────────
-  const [pomodoroMode, setPomodoroMode] = useLocalStorage("fs_pomodoroMode", false);
+  const [pomodoroModeState, setPomodoroModeLocal] = useState(initialPomodoroState?.pomodoroMode ?? false);
   const [showSnail, setShowSnail] = useLocalStorage("fs_showSnail", true);
   const [useProTimePicker, setUseProTimePicker] = useLocalStorage("fs_pro_time_picker", false);
   const [activeProTab, setActiveProTab] = useState<TimerMode>("work");
-  const [workDuration, setWorkDuration] = useLocalStorage("fs_workDuration", 25);
-  const [shortBreakDuration, setShortBreakDuration] = useLocalStorage("fs_shortBreakDuration", 5);
-  const [longBreakDuration, setLongBreakDuration] = useLocalStorage("fs_longBreakDuration", 15);
-  const [sessionsBeforeLongBreak, setSessionsBeforeLongBreak] = useLocalStorage("fs_sessionsBeforeLongBreak", 4);
+  const [workDurationState, setWorkDurationLocal] = useState(initialPomodoroState?.workDuration ?? 25);
+  const [shortBreakDurationState, setShortBreakDurationLocal] = useState(initialPomodoroState?.shortBreakDuration ?? 5);
+  const [longBreakDurationState, setLongBreakDurationLocal] = useState(initialPomodoroState?.longBreakDuration ?? 15);
+  const [sessionsBeforeLongBreakState, setSessionsBeforeLongBreakLocal] = useState(initialPomodoroState?.sessionsBeforeLongBreak ?? 4);
 
-  const [pomodoroPhase, setPomodoroPhase] = useLocalStorage<"work" | "short_break" | "long_break">("fs_phase", "work");
-  const [pomodorosCompleted, setPomodorosCompleted] = useLocalStorage("fs_completed", 0);
-  const [breakStartTime, setBreakStartTime] = useLocalStorage<string | null>("fs_breakStart", null);
-  const [pomodoroAccumulated, setPomodoroAccumulated] = useLocalStorage("fs_accumulated", 0);
+  const [pomodoroPhaseState, setPomodoroPhaseLocal] = useState<"work" | "short_break" | "long_break">((initialPomodoroState?.pomodoroPhase as any) ?? "work");
+  const [pomodorosCompletedState, setPomodorosCompletedLocal] = useState(initialPomodoroState?.pomodorosCompleted ?? 0);
+  const [breakStartTimeState, setBreakStartTimeLocal] = useState<string | null>(initialPomodoroState?.breakStartTime ? new Date(initialPomodoroState.breakStartTime).toISOString() : null);
+  const [pomodoroAccumulatedState, setPomodoroAccumulatedLocal] = useState(initialPomodoroState?.pomodoroAccumulated ?? 0);
+
+  const pomodoroMode = pomodoroModeState;
+  const workDuration = workDurationState;
+  const shortBreakDuration = shortBreakDurationState;
+  const longBreakDuration = longBreakDurationState;
+  const sessionsBeforeLongBreak = sessionsBeforeLongBreakState;
+  const pomodoroPhase = pomodoroPhaseState;
+  const pomodorosCompleted = pomodorosCompletedState;
+  const breakStartTime = breakStartTimeState;
+  const pomodoroAccumulated = pomodoroAccumulatedState;
+  const setPomodoroMode = useCallback((val: boolean | ((prev: boolean) => boolean)) => {
+    setPomodoroModeLocal((prev: boolean) => { const next = typeof val === 'function' ? val(prev) : val; setTimeout(() => startTransition(() => { updateUserPomodoroState({ pomodoroMode: next }) }), 0); return next; });
+  }, []);
+  const setWorkDuration = useCallback((val: number | ((prev: number) => number)) => {
+    setWorkDurationLocal((prev: number) => { const next = typeof val === 'function' ? val(prev) : val; setTimeout(() => startTransition(() => { updateUserPomodoroState({ workDuration: next }) }), 0); return next; });
+  }, []);
+  const setShortBreakDuration = useCallback((val: number | ((prev: number) => number)) => {
+    setShortBreakDurationLocal((prev: number) => { const next = typeof val === 'function' ? val(prev) : val; setTimeout(() => startTransition(() => { updateUserPomodoroState({ shortBreakDuration: next }) }), 0); return next; });
+  }, []);
+  const setLongBreakDuration = useCallback((val: number | ((prev: number) => number)) => {
+    setLongBreakDurationLocal((prev: number) => { const next = typeof val === 'function' ? val(prev) : val; setTimeout(() => startTransition(() => { updateUserPomodoroState({ longBreakDuration: next }) }), 0); return next; });
+  }, []);
+  const setSessionsBeforeLongBreak = useCallback((val: number | ((prev: number) => number)) => {
+    setSessionsBeforeLongBreakLocal((prev: number) => { const next = typeof val === 'function' ? val(prev) : val; setTimeout(() => startTransition(() => { updateUserPomodoroState({ sessionsBeforeLongBreak: next }) }), 0); return next; });
+  }, []);
+  const setPomodoroPhase = useCallback((val: any) => {
+    setPomodoroPhaseLocal((prev: any) => { const next = typeof val === 'function' ? val(prev) : val; setTimeout(() => startTransition(() => { updateUserPomodoroState({ pomodoroPhase: next }) }), 0); return next; });
+  }, []);
+  const setPomodorosCompleted = useCallback((val: number | ((prev: number) => number)) => {
+    setPomodorosCompletedLocal((prev: number) => { const next = typeof val === 'function' ? val(prev) : val; setTimeout(() => startTransition(() => { updateUserPomodoroState({ pomodorosCompleted: next }) }), 0); return next; });
+  }, []);
+  const setBreakStartTime = useCallback((val: string | null | ((prev: string | null) => string | null)) => {
+    setBreakStartTimeLocal((prev: string | null) => { const next = typeof val === 'function' ? val(prev) : val; setTimeout(() => startTransition(() => { updateUserPomodoroState({ breakStartTime: next ? new Date(next) : null }) }), 0); return next; });
+  }, []);
+  const setPomodoroAccumulated = useCallback((val: number | ((prev: number) => number)) => {
+    setPomodoroAccumulatedLocal((prev: number) => { const next = typeof val === 'function' ? val(prev) : val; setTimeout(() => startTransition(() => { updateUserPomodoroState({ pomodoroAccumulated: next }) }), 0); return next; });
+  }, []);
+
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch('/api/pomodoro');
+        if (!res.ok) return;
+        const state = await res.json();
+        if (!state || state.error) return;
+        setPomodoroModeLocal(state.pomodoroMode);
+        setWorkDurationLocal(state.workDuration);
+        setShortBreakDurationLocal(state.shortBreakDuration);
+        setLongBreakDurationLocal(state.longBreakDuration);
+        setSessionsBeforeLongBreakLocal(state.sessionsBeforeLongBreak);
+        setPomodoroPhaseLocal(state.pomodoroPhase as any);
+        setPomodorosCompletedLocal(state.pomodorosCompleted);
+        setBreakStartTimeLocal(state.breakStartTime ? new Date(state.breakStartTime).toISOString() : null);
+        setPomodoroAccumulatedLocal(state.pomodoroAccumulated);
+      } catch (e) {}
+    }, 2000);
+    return () => clearInterval(interval);
+  }, []);
   const [isPaused, setIsPaused] = useLocalStorage("fs_isPaused", false);
 
   // ─── Theme ────────────────────────────────────────────────────────────────
@@ -555,7 +701,7 @@ export default function FlowStateApp({
       // Optimistic update
       setTasks(prev => prev.map(p => {
         if (p.id === inbox.id) {
-          return { ...p, subTasks: [...p.subTasks, subtask] };
+          return { ...p, subTasks: [...p.subTasks, { ...subtask, checklists: [] }] };
         }
         return p;
       }));
@@ -1015,6 +1161,35 @@ export default function FlowStateApp({
               </div>
             </div>
 
+            {/* ─── Recent Tasks ─── */}
+            {recentTasks.length > 0 && (
+              <div className="mb-10">
+                <h2 className="text-xl md:text-2xl font-bold tracking-tight mb-4">Recent Tasks</h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  {recentTasks.map(({ parent, sub }) => {
+                    const hasActive = activeSessions.some(s => s.sub_task_id === sub.id);
+                    return (
+                      <button
+                        key={sub.id}
+                        onClick={() => setView({ kind: "timer", parent, sub })}
+                        className="group relative flex flex-col items-start p-4 rounded-xl border border-surface-border bg-surface-overlay text-left transition-all duration-200 md:hover:bg-surface-overlay-hover md:hover:border-primary/30"
+                      >
+                        <div className="flex items-center gap-2 mb-2 w-full">
+                          <div className="w-6 h-6 rounded-md bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
+                            <Timer className="w-3 h-3 text-primary" />
+                          </div>
+                          <span className="text-[11px] font-medium uppercase tracking-widest text-muted-foreground/70 truncate flex-1">{parent.name}</span>
+                          {hasActive && <div className="w-1.5 h-1.5 rounded-full bg-primary pulse-ring shrink-0" />}
+                        </div>
+                        <h3 className="font-semibold text-[15px] text-foreground truncate w-full mb-1.5">{sub.name}</h3>
+                        <p className="text-xs text-muted-foreground/50 font-mono">{formatShort(sub.total_cumulative_time)}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl md:text-3xl font-bold tracking-tight">Projects</h2>
               <Button
@@ -1393,9 +1568,25 @@ export default function FlowStateApp({
               {/* Checklist & Session Notes */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-10">
                 <div>
-                  <label className="text-sm font-semibold uppercase tracking-[0.15em] text-muted-foreground/70 mb-2 block px-1 flex items-center gap-1.5">
-                    <CheckSquare className="w-3 h-3" /> Checklist
-                  </label>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-sm font-semibold uppercase tracking-[0.15em] text-muted-foreground/70 block px-1 flex items-center gap-1.5">
+                      <CheckSquare className="w-3 h-3" /> Checklist
+                    </label>
+                    <button 
+                      onClick={() => {
+                        const modes = ["newest", "oldest", "status", "status-oldest"] as const;
+                        const idx = modes.indexOf(checklistSort);
+                        setChecklistSort(modes[(idx + 1) % modes.length]);
+                      }}
+                      className="text-[11px] font-medium uppercase tracking-wider flex items-center gap-1.5 text-muted-foreground/60 hover:text-foreground transition-colors px-2 py-1 rounded-md md:hover:bg-surface-overlay"
+                    >
+                      <ArrowUpDown className="w-3 h-3" />
+                      {checklistSort === "newest" ? "Newest First" : 
+                       checklistSort === "oldest" ? "Oldest First" : 
+                       checklistSort === "status" ? "Incomplete (Newest)" : 
+                       "Incomplete (Oldest)"}
+                    </button>
+                  </div>
                   <div className="rounded-xl border border-surface-border bg-surface-overlay overflow-hidden">
                     {/* Items */}
                     {currentChecklist.length > 0 && (
@@ -1405,13 +1596,13 @@ export default function FlowStateApp({
                             <button
                               onClick={() => onToggleChecklistItem(item.id, item.done)}
                               className={cn(
-                                "w-6 h-6 rounded-md border-2 flex items-center justify-center shrink-0 transition-all duration-200",
+                                "w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 transition-all duration-200",
                                 item.done
                                   ? "bg-primary/80 border-primary/60"
                                   : "border-surface-border hover:border-primary/40"
                               )}
                             >
-                              {item.done && <Check className="w-3 h-3 text-surface-text" />}
+                              {item.done && <Check className="w-3.5 h-3.5 text-surface-text" />}
                             </button>
                             <span className={cn(
                               "text-sm flex-1 transition-all duration-200",
@@ -1804,15 +1995,16 @@ export default function FlowStateApp({
               )}
             </div>
 
-            <div>
-              <h4 className="text-sm font-medium mb-1">About</h4>
-              <p className="text-xs text-muted-foreground/80 leading-relaxed">
-                FlowState is a premium minimalist time tracker built for deep work. All data is stored locally on your device.
-              </p>
-            </div>
-            
-            <div className="pt-2 border-t border-surface-border">
-              <p className="text-sm text-muted-foreground/70">FlowState v1.0 · Built with Next.js + Prisma</p>
+
+
+            {/* Save Button */}
+            <div className="pt-4 pb-2">
+              <Button 
+                onClick={() => setSettingsOpen(false)} 
+                className="w-full rounded-xl font-medium shadow-md shadow-primary/20 hover:shadow-primary/30 transition-all"
+              >
+                Save Changes
+              </Button>
             </div>
           </div>
         </DialogContent>

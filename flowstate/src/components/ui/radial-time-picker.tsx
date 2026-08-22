@@ -94,9 +94,9 @@ export const UnifiedTimeWheelPicker: React.FC<UnifiedTimePickerProps> = ({
   const [inputValue, setInputValue] = useState("");
 
   const getCurrentVal = () => {
-    if (activeMode === 'work') return workDuration;
-    if (activeMode === 'short') return shortDuration;
-    return longDuration;
+    if (activeMode === 'work') return workDuration ?? 25;
+    if (activeMode === 'short') return shortDuration ?? 5;
+    return longDuration ?? 15;
   };
 
   useEffect(() => {

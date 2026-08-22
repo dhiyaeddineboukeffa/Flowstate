@@ -7,9 +7,20 @@ datasource db {
 }
 
 model User {
-  id         String       @id @default(uuid())
-  username   String       @unique
-  created_at DateTime     @default(now())
+  id                      String       @id @default(uuid())
+  username                String       @unique
+  created_at              DateTime     @default(now())
+
+  pomodoroMode            Boolean      @default(false)
+  workDuration            Int          @default(25)
+  shortBreakDuration      Int          @default(5)
+  longBreakDuration       Int          @default(15)
+  sessionsBeforeLongBreak Int          @default(4)
+  pomodoroPhase           String       @default("work")
+  pomodorosCompleted      Int          @default(0)
+  breakStartTime          DateTime?
+  pomodoroAccumulated     Int          @default(0)
+
   tasks      ParentTask[]
 }
 
@@ -22,15 +33,15 @@ model ParentTask {
   created_at            DateTime        @default(now())
   user                  User?           @relation(fields: [user_id], references: [id], onDelete: Cascade)
   subTasks              SubTask[]
-  checklists            ChecklistItem[]
 }
 
 model ChecklistItem {
   id             String     @id @default(uuid())
-  parent_task_id String
+  sub_task_id    String
   text           String
   done           Boolean    @default(false)
-  parentTask     ParentTask @relation(fields: [parent_task_id], references: [id], onDelete: Cascade)
+  created_at     DateTime   @default(now())
+  subTask        SubTask    @relation(fields: [sub_task_id], references: [id], onDelete: Cascade)
 }
 
 model SubTask {
@@ -39,8 +50,9 @@ model SubTask {
   name                  String
   total_cumulative_time Int        @default(0)
   created_at            DateTime   @default(now())
-  parentTask            ParentTask @relation(fields: [parent_task_id], references: [id], onDelete: Cascade)
+  parentTask            ParentTask      @relation(fields: [parent_task_id], references: [id], onDelete: Cascade)
   sessions              Session[]
+  checklists            ChecklistItem[]
 }
 
 model Session {

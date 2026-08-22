@@ -57,7 +57,7 @@
 
 @keyframes snail-move-work {
   from {
-    transform: translateX(100vw);
+    transform: translateX(100cqw);
   }
   to {
     transform: translateX(-100%);
@@ -69,7 +69,7 @@
     transform: translateX(-100%) scaleX(-1);
   }
   to {
-    transform: translateX(100vw) scaleX(-1);
+    transform: translateX(100cqw) scaleX(-1);
   }
 }
 

@@ -37,8 +37,9 @@ export async function getParentTasks() {
   return prisma.parentTask.findMany({
     where: { user_id: userId },
     include: { 
-      subTasks: true,
-      checklists: { orderBy: { id: "asc" } }
+      subTasks: {
+        include: { checklists: { orderBy: { created_at: "asc" } } }
+      }
     },
     orderBy: { created_at: "asc" },
   });
@@ -48,7 +49,7 @@ export async function getActiveSessions() {
   const userId = await getUserId();
   return prisma.session.findMany({
     where: { end_time: null, subTask: { parentTask: { user_id: userId } } },
-    include: { subTask: { include: { parentTask: true } } },
+    include: { subTask: { include: { parentTask: true, checklists: true } } },
   });
 }
 
@@ -80,7 +81,7 @@ export async function createParentTask(name: string) {
   const userId = await getUserId();
   const t = await prisma.parentTask.create({ 
     data: { name, user_id: userId }, 
-    include: { subTasks: true, checklists: true } 
+    include: { subTasks: { include: { checklists: true } } } 
   });
   revalidatePath("/");
   return t;
@@ -292,10 +293,10 @@ export async function resumeSession(session_id: string) {
 
 // ─── Checklists ────────────────────────────────────────────────────────────
 
-export async function createChecklistItem(parent_task_id: string, text: string) {
+export async function createChecklistItem(sub_task_id: string, text: string) {
   await getUserId();
   await prisma.checklistItem.create({
-    data: { parent_task_id, text }
+    data: { sub_task_id, text }
   });
   revalidatePath("/");
 }
@@ -312,5 +313,31 @@ export async function toggleChecklistItem(id: string, done: boolean) {
 export async function deleteChecklistItem(id: string) {
   await getUserId();
   await prisma.checklistItem.delete({ where: { id } });
+  revalidatePath("/");
+}
+
+// ─── User Pomodoro State ───────────────────────────────────────────────────
+
+export async function getUserPomodoroState() {
+  const userId = await getUserId();
+  return prisma.user.findUnique({ where: { id: userId } });
+}
+
+export async function updateUserPomodoroState(data: {
+  pomodoroMode?: boolean;
+  workDuration?: number;
+  shortBreakDuration?: number;
+  longBreakDuration?: number;
+  sessionsBeforeLongBreak?: number;
+  pomodoroPhase?: string;
+  pomodorosCompleted?: number;
+  breakStartTime?: Date | null;
+  pomodoroAccumulated?: number;
+}) {
+  const userId = await getUserId();
+  await prisma.user.update({
+    where: { id: userId },
+    data,
+  });
   revalidatePath("/");
 }
