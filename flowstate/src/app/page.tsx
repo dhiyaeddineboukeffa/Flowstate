@@ -1,4 +1,4 @@
-import { getParentTasks, getActiveSessions, getTodaySessions, getUserPomodoroState } from "@/lib/actions";
+import { getParentTasks, getActiveSessions, getTodaySessions, getUserPomodoroState, getRecentSubTaskIds } from "@/lib/actions";
 import FlowStateApp from "@/components/flowstate-app";
 
 import { cookies } from "next/headers";
@@ -13,6 +13,7 @@ export default async function Home() {
   const activeSessions = await getActiveSessions();
   const todaySessions = await getTodaySessions();
   const pomodoroState = await getUserPomodoroState();
+  const recentSubTaskIds = await getRecentSubTaskIds();
 
   return (
     <main className="min-h-screen bg-background" suppressHydrationWarning>
@@ -21,6 +22,7 @@ export default async function Home() {
         initialActiveSessions={activeSessions} 
         initialTodaySessions={todaySessions}
         initialPomodoroState={pomodoroState || undefined}
+        initialRecentSubTaskIds={recentSubTaskIds}
         username={username}
       />
     </main>

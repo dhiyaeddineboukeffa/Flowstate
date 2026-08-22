@@ -61,6 +61,17 @@ export async function getSubTaskSessions(sub_task_id: string) {
   });
 }
 
+export async function getRecentSubTaskIds() {
+  const userId = await getUserId();
+  const recentSessions = await prisma.session.findMany({
+    where: { subTask: { parentTask: { user_id: userId } } },
+    orderBy: { start_time: "desc" },
+    select: { sub_task_id: true },
+    take: 50,
+  });
+  return Array.from(new Set(recentSessions.map(s => s.sub_task_id))).slice(0, 4);
+}
+
 export async function getTodaySessions() {
   const userId = await getUserId();
   const today = new Date();

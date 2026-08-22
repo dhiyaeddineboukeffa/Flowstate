@@ -133,12 +133,14 @@ export default function FlowStateApp({
   initialActiveSessions,
   initialTodaySessions,
   initialPomodoroState,
+  initialRecentSubTaskIds,
   username,
 }: {
   initialTasks: FullParentTask[];
   initialActiveSessions: FullSession[];
   initialTodaySessions: Session[];
   initialPomodoroState?: any;
+  initialRecentSubTaskIds?: string[];
   username: string;
 }) {
   const router = useRouter();
@@ -147,6 +149,14 @@ export default function FlowStateApp({
   const [tasks, setTasks] = useState(initialTasks);
   const [activeSessions, setActiveSessions] = useState(initialActiveSessions);
   const [todaySessions, setTodaySessions] = useState(initialTodaySessions);
+  const [recentSubTaskIds, setRecentSubTaskIds] = useState(initialRecentSubTaskIds || []);
+
+  useEffect(() => {
+    setTasks(initialTasks);
+    setActiveSessions(initialActiveSessions);
+    setTodaySessions(initialTodaySessions);
+    if (initialRecentSubTaskIds) setRecentSubTaskIds(initialRecentSubTaskIds);
+  }, [initialTasks, initialActiveSessions, initialTodaySessions, initialRecentSubTaskIds]);
   const [savedView, setSavedView] = useLocalStorage<{ kind: "projects" | "project" | "timer", parentId?: string, subId?: string }>("fs_savedView", { kind: "projects" });
 
   // Navigation direction for page transitions
@@ -279,8 +289,26 @@ export default function FlowStateApp({
         allSubTasks.push({ parent, sub });
       });
     });
-    return allSubTasks.sort((a, b) => new Date(b.sub.created_at).getTime() - new Date(a.sub.created_at).getTime()).slice(0, 4);
-  }, [tasks]);
+
+    if (recentSubTaskIds.length > 0) {
+      const found: { parent: FullParentTask; sub: FullSubTask }[] = [];
+      recentSubTaskIds.forEach(id => {
+        const match = allSubTasks.find(t => t.sub.id === id);
+        if (match) found.push(match);
+      });
+      if (found.length < 4) {
+        const sortedByNew = allSubTasks.sort((a, b) => new Date(b.sub.created_at).getTime() - new Date(a.sub.created_at).getTime());
+        sortedByNew.forEach(t => {
+          if (found.length < 4 && !found.some(f => f.sub.id === t.sub.id)) {
+            found.push(t);
+          }
+        });
+      }
+      return found.slice(0, 4);
+    } else {
+      return allSubTasks.sort((a, b) => new Date(b.sub.created_at).getTime() - new Date(a.sub.created_at).getTime()).slice(0, 4);
+    }
+  }, [tasks, recentSubTaskIds]);
 
   const addChecklistItem = async () => {
     if (!newChecklistItem.trim() || view.kind !== "timer") return;
