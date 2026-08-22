@@ -1,13 +1,15 @@
 generator client {
   provider = "prisma-client-js"
+  engineType = "library"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
 }
 
 model User {
-  id                      String       @id @default(uuid())
+  id                      String       @id @default(uuid()) @map("_id")
   username                String       @unique
   created_at              DateTime     @default(now())
 
@@ -25,7 +27,7 @@ model User {
 }
 
 model ParentTask {
-  id                    String          @id @default(uuid())
+  id                    String          @id @default(uuid()) @map("_id")
   user_id               String?
   name                  String
   general_notes         String?
@@ -36,7 +38,7 @@ model ParentTask {
 }
 
 model ChecklistItem {
-  id             String     @id @default(uuid())
+  id             String     @id @default(uuid()) @map("_id")
   sub_task_id    String
   text           String
   done           Boolean    @default(false)
@@ -45,7 +47,7 @@ model ChecklistItem {
 }
 
 model SubTask {
-  id                    String     @id @default(uuid())
+  id                    String     @id @default(uuid()) @map("_id")
   parent_task_id        String
   name                  String
   total_cumulative_time Int        @default(0)
@@ -56,7 +58,7 @@ model SubTask {
 }
 
 model Session {
-  id                      String    @id @default(uuid())
+  id                      String    @id @default(uuid()) @map("_id")
   sub_task_id             String
   start_time              DateTime
   end_time                DateTime?
