@@ -4,12 +4,12 @@ generator client {
 }
 
 datasource db {
-  provider = "mongodb"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
 model User {
-  id                      String       @id @default(uuid()) @map("_id")
+  id                      String       @id @default(uuid())
   username                String       @unique
   created_at              DateTime     @default(now())
 
@@ -27,7 +27,7 @@ model User {
 }
 
 model ParentTask {
-  id                    String          @id @default(uuid()) @map("_id")
+  id                    String          @id @default(uuid())
   user_id               String?
   name                  String
   general_notes         String?
@@ -38,7 +38,7 @@ model ParentTask {
 }
 
 model ChecklistItem {
-  id             String     @id @default(uuid()) @map("_id")
+  id             String     @id @default(uuid())
   sub_task_id    String
   text           String
   done           Boolean    @default(false)
@@ -47,7 +47,7 @@ model ChecklistItem {
 }
 
 model SubTask {
-  id                    String     @id @default(uuid()) @map("_id")
+  id                    String     @id @default(uuid())
   parent_task_id        String
   name                  String
   total_cumulative_time Int        @default(0)
@@ -58,7 +58,7 @@ model SubTask {
 }
 
 model Session {
-  id                      String    @id @default(uuid()) @map("_id")
+  id                      String    @id @default(uuid())
   sub_task_id             String
   start_time              DateTime
   end_time                DateTime?

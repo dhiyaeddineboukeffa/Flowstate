@@ -1,23 +1,18 @@
+require('dotenv').config();
 const { MongoClient } = require('mongodb');
 
-async function test(password) {
-  const uri = `mongodb+srv://boukeffadhiyaeddine_db_user:${password}@dzin.vx0fcge.mongodb.net/?appName=DZIN`;
+async function test() {
+  const uri = process.env.DATABASE_URL;
   const client = new MongoClient(uri);
   try {
     await client.connect();
-    console.log(`Success with password: ${password}`);
-    await client.close();
-    process.exit(0);
+    const db = client.db();
+    const user = await db.collection("User").findOne();
+    console.log("SUCCESS:", user);
   } catch (e) {
-    console.error(`Failed with password: ${password}`);
-    console.error(e.message);
+    console.error("ERROR:", e);
+  } finally {
+    await client.close();
   }
 }
-
-async function run() {
-  await test('sgcefucs');
-  await test('c51b3fc2-4b03-45fc-8a33-0075a0149aa9');
-  process.exit(1);
-}
-
-run();
+test();
