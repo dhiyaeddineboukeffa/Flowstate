@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getDb } from "@/lib/mongo";
+import { prisma } from "@/lib/prisma";
 import { cookies } from "next/headers";
 
 export async function GET() {
@@ -10,23 +10,20 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const db = await getDb();
-  const user = await db.collection<any>("User").findOne(
-    { _id: userId },
-    {
-      projection: {
-        pomodoroMode: 1,
-        workDuration: 1,
-        shortBreakDuration: 1,
-        longBreakDuration: 1,
-        sessionsBeforeLongBreak: 1,
-        pomodoroPhase: 1,
-        pomodorosCompleted: 1,
-        breakStartTime: 1,
-        pomodoroAccumulated: 1,
-      }
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      pomodoroMode: true,
+      workDuration: true,
+      shortBreakDuration: true,
+      longBreakDuration: true,
+      sessionsBeforeLongBreak: true,
+      pomodoroPhase: true,
+      pomodorosCompleted: true,
+      breakStartTime: true,
+      pomodoroAccumulated: true,
     }
-  );
+  });
 
   return NextResponse.json(user);
 }
