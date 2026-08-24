@@ -24,29 +24,34 @@ async function getUserId() {
 }
 
 export async function loginUser(username: string) {
-  const uname = username.trim().toLowerCase();
-  const db = await getDb();
-  let user = await db.collection<any>("User").findOne({ username: uname });
-  if (!user) {
-    user = {
-      _id: uuidv4(),
-      username: uname,
-      created_at: new Date(),
-      pomodoroMode: false,
-      workDuration: 25,
-      shortBreakDuration: 5,
-      longBreakDuration: 15,
-      sessionsBeforeLongBreak: 4,
-      pomodoroPhase: "work",
-      pomodorosCompleted: 0,
-      breakStartTime: null,
-      pomodoroAccumulated: 0
-    };
-    await db.collection<any>("User").insertOne(user as any);
+  try {
+    const uname = username.trim().toLowerCase();
+    const db = await getDb();
+    let user = await db.collection<any>("User").findOne({ username: uname });
+    if (!user) {
+      user = {
+        _id: uuidv4(),
+        username: uname,
+        created_at: new Date(),
+        pomodoroMode: false,
+        workDuration: 25,
+        shortBreakDuration: 5,
+        longBreakDuration: 15,
+        sessionsBeforeLongBreak: 4,
+        pomodoroPhase: "work",
+        pomodorosCompleted: 0,
+        breakStartTime: null,
+        pomodoroAccumulated: 0
+      };
+      await db.collection<any>("User").insertOne(user as any);
+    }
+    const cookieStore = await cookies();
+    cookieStore.set("fs_userid", user._id, { path: "/", maxAge: 60 * 60 * 24 * 365 });
+    cookieStore.set("fs_username", user.username, { path: "/", maxAge: 60 * 60 * 24 * 365 });
+    return { success: true };
+  } catch (e: any) {
+    return { success: false, error: e.message || String(e) };
   }
-  const cookieStore = await cookies();
-  cookieStore.set("fs_userid", user._id, { path: "/", maxAge: 60 * 60 * 24 * 365 });
-  cookieStore.set("fs_username", user.username, { path: "/", maxAge: 60 * 60 * 24 * 365 });
 }
 
 export async function logoutUser() {

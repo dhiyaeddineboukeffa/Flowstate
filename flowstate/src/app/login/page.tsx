@@ -28,15 +28,18 @@ export default function LoginPage() {
     setLoading(true);
     addLog(`Attempting to login user: ${uname}`);
     try {
-      await loginUser(uname);
+      const result = await loginUser(uname);
+      if (result && !result.success) {
+        addLog(`SERVER ERROR: ${result.error}`);
+        toast.error("Failed to login: " + result.error);
+        setLoading(false);
+        return;
+      }
       addLog("loginUser succeeded, pushing router.");
       router.push("/");
       router.refresh();
     } catch (error) {
       addLog(`Error caught: ${String(error)}`);
-      if (error instanceof Error) {
-        addLog(`Stack: ${error.stack}`);
-      }
       toast.error("Failed to login");
       setLoading(false);
     }
