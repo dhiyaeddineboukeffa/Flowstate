@@ -4,12 +4,12 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "mongodb"
   url      = env("DATABASE_URL")
 }
 
 model User {
-  id                      String       @id @default(uuid())
+  id                      String       @id @default(auto()) @map("_id") @db.ObjectId
   username                String       @unique
   created_at              DateTime     @default(now())
 
@@ -27,8 +27,8 @@ model User {
 }
 
 model ParentTask {
-  id                    String          @id @default(uuid())
-  user_id               String?
+  id                    String          @id @default(auto()) @map("_id") @db.ObjectId
+  user_id               String?         @db.ObjectId
   name                  String
   general_notes         String?
   total_cumulative_time Int             @default(0)
@@ -38,8 +38,8 @@ model ParentTask {
 }
 
 model ChecklistItem {
-  id             String     @id @default(uuid())
-  sub_task_id    String
+  id             String     @id @default(auto()) @map("_id") @db.ObjectId
+  sub_task_id    String     @db.ObjectId
   text           String
   done           Boolean    @default(false)
   created_at     DateTime   @default(now())
@@ -47,8 +47,8 @@ model ChecklistItem {
 }
 
 model SubTask {
-  id                    String     @id @default(uuid())
-  parent_task_id        String
+  id                    String     @id @default(auto()) @map("_id") @db.ObjectId
+  parent_task_id        String     @db.ObjectId
   name                  String
   total_cumulative_time Int        @default(0)
   created_at            DateTime   @default(now())
@@ -58,8 +58,8 @@ model SubTask {
 }
 
 model Session {
-  id                      String    @id @default(uuid())
-  sub_task_id             String
+  id                      String    @id @default(auto()) @map("_id") @db.ObjectId
+  sub_task_id             String    @db.ObjectId
   start_time              DateTime
   end_time                DateTime?
   duration                Int       @default(0)
