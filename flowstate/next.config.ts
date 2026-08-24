@@ -5,7 +5,8 @@ const nextConfig: NextConfig = {
     "unstiffly-overelliptical-elisha.ngrok-free.dev", 
     "*.ngrok-free.dev", 
     "*.loca.lt", 
-    "*.lhr.life"
+    "*.lhr.life",
+    "*.vercel.app"
   ],
   experimental: {
     serverActions: {
@@ -13,7 +14,8 @@ const nextConfig: NextConfig = {
         "unstiffly-overelliptical-elisha.ngrok-free.dev", 
         "*.ngrok-free.dev", 
         "*.loca.lt", 
-        "*.lhr.life"
+        "*.lhr.life",
+        "*.vercel.app"
       ]
     }
   }
