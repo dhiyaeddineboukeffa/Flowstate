@@ -674,47 +674,129 @@ export default function FlowStateApp({
   const doAddProject = async () => {
     const name = newParentName.trim();
     if (!name) return;
-    await createParentTask(name);
+    const newId = uuidv4();
+    const newProject = { id: newId, name, subTasks: [], user_id: null, general_notes: null, total_cumulative_time: 0, created_at: new Date() } as FullParentTask;
+    setTasks(prev => [...prev, newProject]);
+    store.pushSyncOperation("createParentTask", { name, id: newId });
     setNewParentName("");
     setShowAddProject(false);
-    refresh();
   };
 
   const doAddSubTask = async (parentId: string) => {
     const name = newSubTaskName.trim();
     if (!name) return;
-    await createSubTask(parentId, name);
+    const newId = uuidv4();
+    const newSub = { id: newId, parent_task_id: parentId, name, checklists: [], total_cumulative_time: 0, created_at: new Date() } as FullSubTask;
+    setTasks(prev => prev.map(pt => pt.id === parentId ? { ...pt, subTasks: [...(pt.subTasks || []), newSub] } : pt));
+    store.pushSyncOperation("createSubTask", { parentId, name, id: newId });
     setNewSubTaskName("");
     setShowAddSubTask(false);
-    refresh();
   };
 
   const doRename = async (id: string, type: "project" | "subtask") => {
     const val = renameValue.trim();
     if (!val) { setRenamingId(null); return; }
-    if (type === "project") await renameParentTask(id, val);
-    else await renameSubTask(id, val);
+    if (type === "project") {
+      setTasks(prev => prev.map(t => t.id === id ? { ...t, name: val } : t));
+      store.pushSyncOperation("renameParentTask", { id, name: val });
+    } else {
+      setTasks(prev => prev.map(pt => ({
+        ...pt,
+        subTasks: (pt.subTasks || []).map(s => s.id === id ? { ...s, name: val } : s)
+      })));
+      store.pushSyncOperation("renameSubTask", { id, name: val });
+    }
     setRenamingId(null);
-    refresh();
   };
 
   const doDelete = async () => {
     if (!deleteConfirm) return;
-    if (deleteConfirm.type === "project") {
-      await deleteParentTask(deleteConfirm.id);
+    const { type, id } = deleteConfirm;
+
+    if (type === "project") {
+      // Find the project to get all its subtask IDs
+      const project = tasks.find(t => t.id === id);
+      const subTaskIds = (project?.subTasks || []).map(s => s.id);
+
+      // Stop any active sessions for subtasks in this project
+      setActiveSessions(prev => prev.filter(s => !subTaskIds.includes(s.sub_task_id)));
+
+      // Remove sessions for these subtasks from todaySessions
+      setTodaySessions(prev => prev.filter(s => !subTaskIds.includes(s.sub_task_id)));
+
+      // Remove the project from tasks
+      setTasks(prev => prev.filter(t => t.id !== id));
+
+      // Navigate away if we're inside this project
       if (view.kind !== "projects") setView({ kind: "projects" });
-    } else if (deleteConfirm.type === "subtask") {
-      await deleteSubTask(deleteConfirm.id);
-      if (view.kind === "timer") {
-        const parent = tasks.find((t) => (t.subTasks || []).some((s) => s.id === deleteConfirm.id));
+
+      // Push to sync queue for server deletion
+      store.pushSyncOperation("deleteParentTask", id);
+
+    } else if (type === "subtask") {
+      // Stop any active sessions for this subtask
+      setActiveSessions(prev => prev.filter(s => s.sub_task_id !== id));
+
+      // Remove sessions for this subtask from todaySessions
+      setTodaySessions(prev => prev.filter(s => s.sub_task_id !== id));
+
+      // Remove the subtask from its parent and update cumulative time
+      setTasks(prev => prev.map(pt => {
+        const sub = (pt.subTasks || []).find(s => s.id === id);
+        if (sub) {
+          return {
+            ...pt,
+            subTasks: (pt.subTasks || []).filter(s => s.id !== id),
+            total_cumulative_time: Math.max(0, (pt.total_cumulative_time || 0) - (sub.total_cumulative_time || 0))
+          };
+        }
+        return pt;
+      }));
+
+      // Navigate away if we're on the timer view for this subtask
+      if (view.kind === "timer" && view.sub.id === id) {
+        const parent = tasks.find(t => (t.subTasks || []).some(s => s.id === id));
         if (parent) setView({ kind: "project", parent });
         else setView({ kind: "projects" });
       }
-    } else if (deleteConfirm.type === "session") {
-      await deleteSession(deleteConfirm.id);
+
+      // Push to sync queue for server deletion
+      store.pushSyncOperation("deleteSubTask", id);
+
+    } else if (type === "session") {
+      // Find the session to get its duration and sub_task_id
+      const session = todaySessions.find(s => s.id === id);
+
+      // Remove from todaySessions
+      setTodaySessions(prev => prev.filter(s => s.id !== id));
+
+      // Also remove from activeSessions in case it's still active
+      setActiveSessions(prev => prev.filter(s => s.id !== id));
+
+      // Subtract duration from parent and subtask cumulative times
+      if (session && session.duration > 0) {
+        setTasks(prev => prev.map(pt => {
+          const sub = (pt.subTasks || []).find(s => s.id === session.sub_task_id);
+          if (sub) {
+            return {
+              ...pt,
+              total_cumulative_time: Math.max(0, (pt.total_cumulative_time || 0) - session.duration),
+              subTasks: (pt.subTasks || []).map(s =>
+                s.id === session.sub_task_id
+                  ? { ...s, total_cumulative_time: Math.max(0, (s.total_cumulative_time || 0) - session.duration) }
+                  : s
+              )
+            };
+          }
+          return pt;
+        }));
+      }
+
+      // Push to sync queue for server deletion
+      store.pushSyncOperation("deleteSession", id);
     }
+
     setDeleteConfirm(null);
-    refresh();
   };
 
   const handleStartTimer = async (subTaskId: string) => {

@@ -57,6 +57,9 @@ export default function SyncProvider({ children }: { children: React.ReactNode }
               case 'resumeSession':
                 await resumeSession(op.payload);
                 break;
+              case 'deleteSession':
+                await deleteSession(op.payload);
+                break;
               case 'updateUserPomodoroState':
                 await updateUserPomodoroState(op.payload);
                 break;
