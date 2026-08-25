@@ -188,26 +188,22 @@ export default function FlowStateApp({
     try {
       const res = await loginUser(loginUsername);
       if (res.success) {
-        setCurrentUsername(loginUsername);
-        setLoginModalOpen(false);
-        const data = await fetchAllData();
-        store.setTasks(data.tasks);
-        store.setActiveSessions(data.activeSessions);
-        store.setTodaySessions(data.todaySessions);
-        if (data.pomodoroState) store.updatePomodoroState(data.pomodoroState);
-        store.setRecentSubTaskIds(data.recentSubTaskIds);
+        localStorage.removeItem("flowstate-storage");
+        window.location.reload();
       } else {
         alert("Login failed: " + res.error);
+        setIsLoggingIn(false);
       }
     } catch (err) {
       console.error(err);
       alert("Error logging in");
+      setIsLoggingIn(false);
     }
-    setIsLoggingIn(false);
   };
 
   const handleLogout = async () => {
     await logoutUser();
+    localStorage.removeItem("flowstate-storage");
     window.location.reload();
   };
 
@@ -1093,13 +1089,7 @@ export default function FlowStateApp({
                 <ArrowLeft className="w-4 h-4 text-muted-foreground" />
               </button>
             )}
-            <button
-              onClick={() => setSettingsOpen(true)}
-              className="p-2 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg md:hover:bg-surface-overlay-hover transition-colors ml-1"
-              title="Settings"
-            >
-              <Settings className="w-4 h-4 text-muted-foreground" />
-            </button>
+
 
 
             {/* Breadcrumb */}
@@ -1143,6 +1133,13 @@ export default function FlowStateApp({
             )}
 
             
+            <button
+              onClick={() => setSettingsOpen(true)}
+              className="p-2 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg md:hover:bg-surface-overlay-hover transition-colors ml-1"
+              title="Settings"
+            >
+              <Settings className="w-4 h-4 text-muted-foreground" />
+            </button>
           {currentUsername && currentUsername !== "User" ? (
             <button onClick={handleLogout} className="flex items-center gap-2 px-3 h-9 rounded-full border border-surface-border bg-surface-overlay hover:bg-surface-overlay-hover transition-colors group relative ml-2">
               <span className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary shrink-0">
