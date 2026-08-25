@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useTransition, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { ParentTask, SubTask, Session, ChecklistItem } from "@prisma/client";
+import { ParentTask, SubTask, Session, ChecklistItem } from "@/types";
 import {
   startSession,
   stopSession,
@@ -532,27 +532,6 @@ export default function FlowStateApp({
   }, []);
   const setPomodoroAccumulated = useCallback((val: number | ((prev: number) => number)) => {
     setPomodoroAccumulatedLocal((prev: number) => { const next = typeof val === 'function' ? val(prev) : val; setTimeout(() => startTransition(() => { updateUserPomodoroState({ pomodoroAccumulated: next }) }), 0); return next; });
-  }, []);
-
-  useEffect(() => {
-    const interval = setInterval(async () => {
-      try {
-        const res = await fetch('/api/pomodoro');
-        if (!res.ok) return;
-        const state = await res.json();
-        if (!state || state.error) return;
-        setPomodoroModeLocal(state.pomodoroMode);
-        setWorkDurationLocal(state.workDuration);
-        setShortBreakDurationLocal(state.shortBreakDuration);
-        setLongBreakDurationLocal(state.longBreakDuration);
-        setSessionsBeforeLongBreakLocal(state.sessionsBeforeLongBreak);
-        setPomodoroPhaseLocal(state.pomodoroPhase as any);
-        setPomodorosCompletedLocal(state.pomodorosCompleted);
-        setBreakStartTimeLocal(state.breakStartTime ? new Date(state.breakStartTime).toISOString() : null);
-        setPomodoroAccumulatedLocal(state.pomodoroAccumulated);
-      } catch (e) {}
-    }, 2000);
-    return () => clearInterval(interval);
   }, []);
   const [isPaused, setIsPaused] = useLocalStorage("fs_isPaused", false);
 
