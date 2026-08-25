@@ -53,11 +53,13 @@ export const useFlowStore = create<FlowState>()(
       syncQueue: [],
       
       initialize: (data) => set((state) => {
-        // Only initialize if we don't have tasks (e.g. first load)
-        if (state.tasks.length === 0) {
-          return { ...state, ...data };
+        const safeData: any = {};
+        for (const [k, v] of Object.entries(data)) {
+          if (v !== undefined) safeData[k] = v;
         }
-        // Alternatively, we could deeply merge, but for now just respect local-first
+        if (!state.tasks || state.tasks.length === 0) {
+          return { ...state, ...safeData };
+        }
         return state;
       }),
       

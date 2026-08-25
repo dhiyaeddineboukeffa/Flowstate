@@ -150,26 +150,31 @@ export default function FlowStateApp({
   const [, startTransition] = useTransition();
 
   const store = useFlowStore();
-  const tasks = (store.tasks || []).filter(Boolean);
+  const tasks = store.tasks || [];
   const setTasks = store.setTasks;
-  const activeSessions = (store.activeSessions || []).filter(Boolean);
+  const activeSessions = store.activeSessions || [];
   const setActiveSessions = store.setActiveSessions;
-  const todaySessions = (store.todaySessions || []).filter(Boolean);
+  const todaySessions = store.todaySessions || [];
   const setTodaySessions = store.setTodaySessions;
   const recentSubTaskIds = store.recentSubTaskIds || [];
   const setRecentSubTaskIds = store.setRecentSubTaskIds;
-  
-  useEffect(() => {
-    
 
-    store.initialize({
-      tasks: initialTasks as any,
-      activeSessions: initialActiveSessions as any,
-      todaySessions: initialTodaySessions,
-      pomodoroState: initialPomodoroState || store.pomodoroState,
-      recentSubTaskIds: initialRecentSubTaskIds || []
-    });
-  }, [initialTasks, initialActiveSessions, initialTodaySessions, initialPomodoroState, initialRecentSubTaskIds, store]);
+  useEffect(() => {
+    if (!store.tasks || store.tasks.length === 0) {
+      fetchAllData().then(data => {
+        store.initialize({
+          tasks: data.tasks as any,
+          activeSessions: data.activeSessions as any,
+          todaySessions: data.todaySessions as any,
+          pomodoroState: data.pomodoroState,
+          recentSubTaskIds: data.recentSubTaskIds
+        });
+      }).catch(err => console.error("Failed to fetch data:", err));
+    }
+  }, []); // Run ONCE on mount
+
+  
+  
   const [savedView, setSavedView] = useLocalStorage<{ kind: "projects" | "project" | "timer", parentId?: string, subId?: string }>("fs_savedView", { kind: "projects" });
 
   // Navigation direction for page transitions
