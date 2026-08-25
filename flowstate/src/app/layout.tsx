@@ -29,6 +29,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${geistMono.variable} dark antialiased`} suppressHydrationWarning>
       <body className="min-h-screen bg-background text-foreground transition-colors duration-300" suppressHydrationWarning>
+        <script dangerouslySetInnerHTML={{ __html: `if (!localStorage.getItem('fs_v3_wipe')) { localStorage.clear(); localStorage.setItem('fs_v3_wipe', 'true'); }` }} />
         {children}
         <Toaster />
       </body>

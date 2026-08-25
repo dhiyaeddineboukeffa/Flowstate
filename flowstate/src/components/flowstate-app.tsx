@@ -150,16 +150,23 @@ export default function FlowStateApp({
   const [, startTransition] = useTransition();
 
   const store = useFlowStore();
-  const tasks = store.tasks || [];
+  const tasks = (store.tasks || []).filter(Boolean);
   const setTasks = store.setTasks;
-  const activeSessions = store.activeSessions || [];
+  const activeSessions = (store.activeSessions || []).filter(Boolean);
   const setActiveSessions = store.setActiveSessions;
-  const todaySessions = store.todaySessions || [];
+  const todaySessions = (store.todaySessions || []).filter(Boolean);
   const setTodaySessions = store.setTodaySessions;
   const recentSubTaskIds = store.recentSubTaskIds || [];
   const setRecentSubTaskIds = store.setRecentSubTaskIds;
   
   useEffect(() => {
+    if (typeof window !== 'undefined' && !localStorage.getItem('fs_v2_migrated')) {
+      localStorage.clear();
+      localStorage.setItem('fs_v2_migrated', 'true');
+      window.location.reload();
+      return;
+    }
+
     store.initialize({
       tasks: initialTasks as any,
       activeSessions: initialActiveSessions as any,
