@@ -189,6 +189,12 @@ export default function FlowStateApp({
       const res = await loginUser(loginUsername);
       if (res.success) {
         localStorage.removeItem("flowstate-storage");
+        localStorage.removeItem("fs_savedView");
+        localStorage.removeItem("fs_checklist_sort");
+        localStorage.removeItem("fs_showSnail");
+        localStorage.removeItem("fs_pro_time_picker");
+        localStorage.removeItem("fs_isPaused");
+        localStorage.removeItem("fs_theme");
         window.location.reload();
       } else {
         alert("Login failed: " + res.error);
@@ -204,6 +210,12 @@ export default function FlowStateApp({
   const handleLogout = async () => {
     await logoutUser();
     localStorage.removeItem("flowstate-storage");
+    localStorage.removeItem("fs_savedView");
+    localStorage.removeItem("fs_checklist_sort");
+    localStorage.removeItem("fs_showSnail");
+    localStorage.removeItem("fs_pro_time_picker");
+    localStorage.removeItem("fs_isPaused");
+    localStorage.removeItem("fs_theme");
     window.location.reload();
   };
 
@@ -2187,6 +2199,30 @@ export default function FlowStateApp({
               <Clock className="w-6 h-6 text-muted-foreground" />
             </button>
           </div>
+        </DialogContent>
+      </Dialog>
+      {/* Login Modal */}
+      <Dialog open={loginModalOpen} onOpenChange={setLoginModalOpen}>
+        <DialogContent className="sm:max-w-sm bg-card border-surface-border">
+          <DialogHeader>
+            <DialogTitle className="text-center text-xl font-medium tracking-tight">Login to FlowState</DialogTitle>
+            <DialogDescription className="text-center text-muted-foreground/60">
+              Enter your username to sync your data
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleLogin} className="flex flex-col gap-4 mt-2">
+            <Input
+              type="text"
+              placeholder="Username"
+              value={loginUsername}
+              onChange={(e) => setLoginUsername(e.target.value)}
+              className="text-base bg-surface-overlay"
+              autoFocus
+            />
+            <Button type="submit" disabled={isLoggingIn || !loginUsername.trim()} className="w-full h-11 rounded-xl font-medium">
+              {isLoggingIn ? "Logging in..." : "Login"}
+            </Button>
+          </form>
         </DialogContent>
       </Dialog>
     </div>
