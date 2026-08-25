@@ -1,5 +1,5 @@
 "use client";
-import { fetchAllData } from "@/lib/actions";
+import { fetchAllData, loginUser } from "@/lib/actions";
 import { useFlowStore } from "@/store/useFlowStore";
 
 import { useState, useEffect, useCallback, useTransition, useMemo } from "react";
@@ -175,6 +175,42 @@ export default function FlowStateApp({
 
   
   
+  
+  const [currentUsername, setCurrentUsername] = useState(username);
+  const [loginModalOpen, setLoginModalOpen] = useState(false);
+  const [loginUsername, setLoginUsername] = useState("");
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!loginUsername.trim()) return;
+    setIsLoggingIn(true);
+    try {
+      const res = await loginUser(loginUsername);
+      if (res.success) {
+        setCurrentUsername(loginUsername);
+        setLoginModalOpen(false);
+        const data = await fetchAllData();
+        store.setTasks(data.tasks);
+        store.setActiveSessions(data.activeSessions);
+        store.setTodaySessions(data.todaySessions);
+        if (data.pomodoroState) store.updatePomodoroState(data.pomodoroState);
+        store.setRecentSubTaskIds(data.recentSubTaskIds);
+      } else {
+        alert("Login failed: " + res.error);
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error logging in");
+    }
+    setIsLoggingIn(false);
+  };
+
+  const handleLogout = async () => {
+    await logoutUser();
+    window.location.reload();
+  };
+
   const [savedView, setSavedView] = useLocalStorage<{ kind: "projects" | "project" | "timer", parentId?: string, subId?: string }>("fs_savedView", { kind: "projects" });
 
   // Navigation direction for page transitions
