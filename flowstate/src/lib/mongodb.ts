@@ -14,26 +14,32 @@ if (!uri.includes('maxPoolSize')) {
 const options = {};
 
 let client: MongoClient;
-let clientPromise: Promise<MongoClient>;
+let clientPromise: Promise<MongoClient> | null = null;
 
 declare global {
   var _mongoClientPromise: Promise<MongoClient> | undefined;
 }
 
-if (process.env.NODE_ENV === 'development') {
-  // In development mode, use a global variable so that the value
-  // is preserved across module reloads caused by HMR (Hot Module Replacement).
-  if (!global._mongoClientPromise) {
-    client = new MongoClient(uri, options);
-    global._mongoClientPromise = client.connect();
+async function getMongoClient(): Promise<MongoClient> {
+  if (process.env.NODE_ENV === 'development') {
+    if (!global._mongoClientPromise) {
+      client = new MongoClient(uri, options);
+      global._mongoClientPromise = client.connect().catch(err => {
+        global._mongoClientPromise = undefined;
+        throw err;
+      });
+    }
+    return global._mongoClientPromise;
+  } else {
+    if (!clientPromise) {
+      client = new MongoClient(uri, options);
+      clientPromise = client.connect().catch(err => {
+        clientPromise = null;
+        throw err;
+      });
+    }
+    return clientPromise;
   }
-  clientPromise = global._mongoClientPromise;
-} else {
-  // In production mode, it's best to not use a global variable.
-  // The maxPoolSize=2 in the URI ensures each serverless function 
-  // only opens a minimal number of connections.
-  client = new MongoClient(uri, options);
-  clientPromise = client.connect();
 }
 
-export default clientPromise;
+export default getMongoClient;

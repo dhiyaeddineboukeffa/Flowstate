@@ -667,9 +667,22 @@ export default function FlowStateApp({
         setBreakStartTime(new Date().toISOString());
         setIsProcessing(false);
       } else {
-        await startSession(subTaskId);
+        const fakeSession = {
+          id: "temp-" + Date.now(),
+          sub_task_id: subTaskId,
+          start_time: new Date(),
+          end_time: null,
+          duration: 0,
+          session_notes: null,
+          is_paused: false,
+          last_paused_at: null,
+          accumulated_paused_time: 0
+        };
+        setActiveSessions(prev => [...prev, fakeSession as any]);
         setIsPaused(false);
         setIsProcessing(false);
+        
+        await startSession(subTaskId);
         refresh();
       }
     }
@@ -732,6 +745,7 @@ export default function FlowStateApp({
   };
 
   const handleStartWithPause = async () => {
+    setActiveSessions([]);
     for (const s of activeSessions) await stopSession(s.id);
     if (pendingSubTaskId) await startSession(pendingSubTaskId);
     setConflictModalOpen(false);
@@ -739,7 +753,21 @@ export default function FlowStateApp({
   };
 
   const handleStartConcurrent = async () => {
-    if (pendingSubTaskId) await startSession(pendingSubTaskId);
+    if (pendingSubTaskId) {
+      const fakeSession = {
+        id: "temp-" + Date.now(),
+        sub_task_id: pendingSubTaskId,
+        start_time: new Date(),
+        end_time: null,
+        duration: 0,
+        session_notes: null,
+        is_paused: false,
+        last_paused_at: null,
+        accumulated_paused_time: 0
+      };
+      setActiveSessions(prev => [...prev, fakeSession as any]);
+      await startSession(pendingSubTaskId);
+    }
     setConflictModalOpen(false);
     refresh();
   };
@@ -747,6 +775,8 @@ export default function FlowStateApp({
   const handleStopTimer = async (sessionId: string, autoPomodoroTransition = false) => {
     setIsProcessing(true);
     setIsPaused(false);
+    setActiveSessions(prev => prev.filter(s => s.id !== sessionId));
+    
     await stopSession(sessionId);
     
     if (pomodoroMode) {
@@ -763,12 +793,14 @@ export default function FlowStateApp({
 
   const handlePauseTimer = async (sessionId: string) => {
     setIsPaused(true);
+    setActiveSessions(prev => prev.map(s => s.id === sessionId ? { ...s, is_paused: true, last_paused_at: new Date() } : s));
     await pauseSession(sessionId);
     refresh();
   };
 
   const handleResumeTimer = async (sessionId: string) => {
     setIsPaused(false);
+    setActiveSessions(prev => prev.map(s => s.id === sessionId ? { ...s, is_paused: false, last_paused_at: null } : s));
     await resumeSession(sessionId);
     refresh();
   };

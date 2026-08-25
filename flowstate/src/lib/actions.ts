@@ -1,6 +1,6 @@
 "use server";
 
-import clientPromise from "./mongodb";
+import getMongoClient from "./mongodb";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { ObjectId, WithId, Document } from "mongodb";
@@ -13,7 +13,7 @@ function toMongoId(id: string): any {
 }
 
 async function getDb() {
-  const client = await clientPromise;
+  const client = await getMongoClient();
   return client.db("flowstate");
 }
 

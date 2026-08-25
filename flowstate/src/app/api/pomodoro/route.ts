@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import clientPromise from "@/lib/mongodb";
+import getMongoClient from "@/lib/mongodb";
 import { cookies } from "next/headers";
 import { ObjectId } from "mongodb";
 
@@ -11,7 +11,7 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const client = await clientPromise;
+  const client = await getMongoClient();
   const db = client.db("flowstate");
 
   const mongoId = (ObjectId.isValid(userId) && (userId.length === 12 || userId.length === 24)) ? new ObjectId(userId) : userId;
