@@ -197,13 +197,14 @@ export async function createParentTask(name: string, client_id?: string) {
   const userId = await getUserId();
   const db = await getDb();
   
-  const doc = {
+  const doc: any = {
     user_id: toMongoId(userId),
     name,
     general_notes: null,
     total_cumulative_time: 0,
     created_at: new Date()
   };
+  if (client_id) doc._id = toMongoId(client_id);
   const res = await db.collection("ParentTask").insertOne(doc);
   
   return { ...mapId({ _id: res.insertedId, ...doc }), subTasks: [] };
@@ -213,12 +214,13 @@ export async function createSubTask(parent_task_id: string, name: string, client
   await getUserId();
   const db = await getDb();
   
-  const doc = {
+  const doc: any = {
     parent_task_id: toMongoId(parent_task_id),
     name,
     total_cumulative_time: 0,
     created_at: new Date()
   };
+  if (client_id) doc._id = toMongoId(client_id);
   const res = await db.collection("SubTask").insertOne(doc);
   
   return mapId({ _id: res.insertedId, ...doc });
@@ -357,7 +359,7 @@ export async function startSession(sub_task_id: string, client_id?: string) {
   await getUserId();
   const db = await getDb();
   
-  const doc = {
+  const doc: any = {
     sub_task_id: toMongoId(sub_task_id),
     start_time: new Date(),
     end_time: null,
@@ -367,6 +369,7 @@ export async function startSession(sub_task_id: string, client_id?: string) {
     last_paused_at: null,
     accumulated_paused_time: 0
   };
+  if (client_id) doc._id = toMongoId(client_id);
   const res = await db.collection("Session").insertOne(doc);
   
   

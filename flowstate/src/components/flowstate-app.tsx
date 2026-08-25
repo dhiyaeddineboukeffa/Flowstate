@@ -833,13 +833,49 @@ export default function FlowStateApp({
   const handleStopTimer = async (sessionId: string, autoPomodoroTransition = false) => {
     setIsProcessing(true);
     setIsPaused(false);
-    setActiveSessions(prev => prev.filter(s => s.id !== sessionId));
+    
+    const sessionToStop = activeSessions.find(s => s.id === sessionId);
+    if (sessionToStop) {
+      const end_time = new Date();
+      const elapsedTotal = Math.round((end_time.getTime() - new Date(sessionToStop.start_time).getTime()) / 1000);
+      let duration = Math.max(0, elapsedTotal - (sessionToStop.accumulated_paused_time || 0));
+      
+      if (sessionToStop.is_paused && sessionToStop.last_paused_at) {
+        const finalPauseTime = Math.round((end_time.getTime() - new Date(sessionToStop.last_paused_at).getTime()) / 1000);
+        duration = Math.max(0, duration - finalPauseTime);
+      }
+      
+      const stoppedSession = {
+        ...sessionToStop,
+        end_time,
+        duration,
+        is_paused: false,
+        last_paused_at: null
+      };
+
+      setActiveSessions(prev => prev.filter(s => s.id !== sessionId));
+      setTodaySessions(prev => [stoppedSession as any, ...prev]);
+
+      setTasks(prevTasks => prevTasks.map(pt => {
+        let updatedPt = false;
+        const newSubTasks = pt.subTasks?.map(st => {
+          if (st.id === sessionToStop.sub_task_id) {
+            updatedPt = true;
+            return { ...st, total_cumulative_time: (st.total_cumulative_time || 0) + duration };
+          }
+          return st;
+        });
+        if (updatedPt) {
+          return { ...pt, total_cumulative_time: (pt.total_cumulative_time || 0) + duration, subTasks: newSubTasks };
+        }
+        return pt;
+      }));
+    }
     
     store.pushSyncOperation("stopSession", sessionId);
     
     if (pomodoroMode) {
       if (!autoPomodoroTransition) {
-        // Manual stop - reset to work phase just to be safe
         setPomodoroPhase("work");
         setBreakStartTime(null);
         setPomodoroAccumulated(0);
@@ -858,7 +894,18 @@ export default function FlowStateApp({
 
   const handleResumeTimer = async (sessionId: string) => {
     setIsPaused(false);
-    setActiveSessions(prev => prev.map(s => s.id === sessionId ? { ...s, is_paused: false, last_paused_at: null } : s));
+    setActiveSessions(prev => prev.map(s => {
+      if (s.id === sessionId && s.is_paused && s.last_paused_at) {
+        const pausedDuration = Math.round((new Date().getTime() - new Date(s.last_paused_at).getTime()) / 1000);
+        return { 
+          ...s, 
+          is_paused: false, 
+          last_paused_at: null,
+          accumulated_paused_time: (s.accumulated_paused_time || 0) + pausedDuration
+        };
+      }
+      return s;
+    }));
     store.pushSyncOperation("resumeSession", sessionId);
     refresh();
   };
@@ -1046,6 +1093,14 @@ export default function FlowStateApp({
                 <ArrowLeft className="w-4 h-4 text-muted-foreground" />
               </button>
             )}
+            <button
+              onClick={() => setSettingsOpen(true)}
+              className="p-2 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg md:hover:bg-surface-overlay-hover transition-colors ml-1"
+              title="Settings"
+            >
+              <Settings className="w-4 h-4 text-muted-foreground" />
+            </button>
+
 
             {/* Breadcrumb */}
             <nav className="flex items-center gap-1.5 text-sm flex-1 min-w-0">
@@ -1087,28 +1142,24 @@ export default function FlowStateApp({
               </div>
             )}
 
-            <div className="hidden sm:flex items-center px-3 h-9 rounded-full bg-surface-overlay border border-surface-border text-sm text-muted-foreground ml-2">
-              <span className="opacity-70 mr-1">Hi,</span> <span className="text-foreground font-medium">{username}</span>
-            </div>
-
-            <button
-              onClick={() => setSettingsOpen(true)}
-              className="p-2 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg md:hover:bg-surface-overlay-hover transition-colors"
-              title="Settings"
-            >
-              <Settings className="w-4 h-4 text-muted-foreground" />
+            
+          {currentUsername && currentUsername !== "User" ? (
+            <button onClick={handleLogout} className="flex items-center gap-2 px-3 h-9 rounded-full border border-surface-border bg-surface-overlay hover:bg-surface-overlay-hover transition-colors group relative ml-2">
+              <span className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary shrink-0">
+                {currentUsername.charAt(0).toUpperCase()}
+              </span>
+              <span className="text-sm font-medium text-foreground group-hover:hidden truncate max-w-[80px]">Hi, {currentUsername}</span>
+              <span className="text-sm font-medium text-red-400 hidden group-hover:inline max-w-[80px]">Logout</span>
             </button>
-
-            <button
-              onClick={async () => {
-                await logoutUser();
-                router.push("/login");
-              }}
-              className="p-2 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg hover:bg-red-500/10 text-muted-foreground hover:text-red-400 transition-colors"
-              title="Logout"
-            >
-              <LogOut className="w-4 h-4" />
+          ) : (
+            <button onClick={() => setLoginModalOpen(true)} className="flex items-center gap-2 px-3 h-9 rounded-full border border-surface-border bg-surface-overlay hover:bg-surface-overlay-hover transition-colors ml-2">
+              <span className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary shrink-0">
+                ?
+              </span>
+              <span className="text-sm font-medium text-foreground">Login to Sync</span>
             </button>
+          )}
+
           </div>
         </div>
       </header>
