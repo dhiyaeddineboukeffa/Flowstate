@@ -1,21 +1,42 @@
+"use client";
+
+import React from "react";
 import FlowStateApp from "@/components/flowstate-app";
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
 
-export const dynamic = "force-dynamic";
-
-export default async function Home() {
-  const cookieStore = await cookies();
-  const username = cookieStore.get("fs_username")?.value || "User";
-  const userId = cookieStore.get("fs_userid")?.value;
-
-  if (!userId) {
-    redirect("/login");
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
   }
 
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error("ErrorBoundary caught:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: 40, color: 'red', background: 'black', minHeight: '100vh', fontFamily: 'monospace' }}>
+          <h2>Something went wrong.</h2>
+          <pre style={{ whiteSpace: 'pre-wrap' }}>{this.state.error?.toString()}</pre>
+          <pre style={{ whiteSpace: 'pre-wrap', marginTop: 20 }}>{this.state.error?.stack}</pre>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+export default function Home() {
   return (
     <main className="min-h-screen bg-background" suppressHydrationWarning>
-      <FlowStateApp username={username} />
+      <ErrorBoundary>
+        <FlowStateApp username="User" />
+      </ErrorBoundary>
     </main>
   );
 }
