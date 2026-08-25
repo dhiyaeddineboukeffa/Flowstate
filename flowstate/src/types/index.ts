@@ -49,3 +49,8 @@ export interface Session {
   last_paused_at: Date | null;
   accumulated_paused_time: number;
 }
+
+
+export type FullSubTask = SubTask & { checklists: ChecklistItem[] };
+export type FullParentTask = ParentTask & { subTasks: FullSubTask[] };
+export type StoreFullSession = Session & { parent_task_id: string; parent_name: string; sub_name: string };

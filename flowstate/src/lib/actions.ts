@@ -193,7 +193,7 @@ export async function getTodaySessions() {
 
 // --- Create ---
 
-export async function createParentTask(name: string) {
+export async function createParentTask(name: string, client_id?: string) {
   const userId = await getUserId();
   const db = await getDb();
   
@@ -205,11 +205,11 @@ export async function createParentTask(name: string) {
     created_at: new Date()
   };
   const res = await db.collection("ParentTask").insertOne(doc);
-  revalidatePath("/");
+  
   return { ...mapId({ _id: res.insertedId, ...doc }), subTasks: [] };
 }
 
-export async function createSubTask(parent_task_id: string, name: string) {
+export async function createSubTask(parent_task_id: string, name: string, client_id?: string) {
   await getUserId();
   const db = await getDb();
   
@@ -220,7 +220,7 @@ export async function createSubTask(parent_task_id: string, name: string) {
     created_at: new Date()
   };
   const res = await db.collection("SubTask").insertOne(doc);
-  revalidatePath("/");
+  
   return mapId({ _id: res.insertedId, ...doc });
 }
 
@@ -230,28 +230,28 @@ export async function renameParentTask(id: string, name: string) {
   await getUserId();
   const db = await getDb();
   await db.collection("ParentTask").updateOne({ _id: toMongoId(id) }, { $set: { name } });
-  revalidatePath("/");
+  
 }
 
 export async function renameSubTask(id: string, name: string) {
   await getUserId();
   const db = await getDb();
   await db.collection("SubTask").updateOne({ _id: toMongoId(id) }, { $set: { name } });
-  revalidatePath("/");
+  
 }
 
 export async function updateParentTaskNotes(id: string, notes: string) {
   await getUserId();
   const db = await getDb();
   await db.collection("ParentTask").updateOne({ _id: toMongoId(id) }, { $set: { general_notes: notes } });
-  revalidatePath("/");
+  
 }
 
 export async function updateSessionNotes(id: string, notes: string) {
   await getUserId();
   const db = await getDb();
   await db.collection("Session").updateOne({ _id: toMongoId(id) }, { $set: { session_notes: notes } });
-  revalidatePath("/");
+  
 }
 
 export async function updateSessionTime(
@@ -287,7 +287,7 @@ export async function updateSessionTime(
     }
   }
 
-  revalidatePath("/");
+  
 }
 
 // --- Delete ---
@@ -304,7 +304,7 @@ export async function deleteParentTask(id: string) {
   await db.collection("SubTask").deleteMany({ parent_task_id: toMongoId(id) });
   await db.collection("ParentTask").deleteOne({ _id: toMongoId(id) });
   
-  revalidatePath("/");
+  
 }
 
 export async function deleteSubTask(id: string) {
@@ -323,7 +323,7 @@ export async function deleteSubTask(id: string) {
   await db.collection("Session").deleteMany({ sub_task_id: toMongoId(id) });
   await db.collection("SubTask").deleteOne({ _id: toMongoId(id) });
   
-  revalidatePath("/");
+  
 }
 
 export async function deleteSession(session_id: string) {
@@ -348,12 +348,12 @@ export async function deleteSession(session_id: string) {
   }
 
   await db.collection("Session").deleteOne({ _id: toMongoId(session_id) });
-  revalidatePath("/");
+  
 }
 
 // --- Timer ---
 
-export async function startSession(sub_task_id: string) {
+export async function startSession(sub_task_id: string, client_id?: string) {
   await getUserId();
   const db = await getDb();
   
@@ -369,7 +369,7 @@ export async function startSession(sub_task_id: string) {
   };
   const res = await db.collection("Session").insertOne(doc);
   
-  revalidatePath("/");
+  
   return mapId({ _id: res.insertedId, ...doc });
 }
 
@@ -406,7 +406,7 @@ export async function stopSession(session_id: string) {
     );
   }
 
-  revalidatePath("/");
+  
 }
 
 export async function pauseSession(session_id: string) {
@@ -416,7 +416,7 @@ export async function pauseSession(session_id: string) {
     { _id: toMongoId(session_id) },
     { $set: { is_paused: true, last_paused_at: new Date() } }
   );
-  revalidatePath("/");
+  
 }
 
 export async function resumeSession(session_id: string) {
@@ -435,7 +435,7 @@ export async function resumeSession(session_id: string) {
       $inc: { accumulated_paused_time: pausedDuration }
     }
   );
-  revalidatePath("/");
+  
 }
 
 // --- Checklists ---
@@ -449,7 +449,7 @@ export async function createChecklistItem(sub_task_id: string, text: string) {
     done: false,
     created_at: new Date()
   });
-  revalidatePath("/");
+  
 }
 
 export async function toggleChecklistItem(id: string, done: boolean) {
@@ -459,14 +459,14 @@ export async function toggleChecklistItem(id: string, done: boolean) {
     { _id: toMongoId(id) },
     { $set: { done } }
   );
-  revalidatePath("/");
+  
 }
 
 export async function deleteChecklistItem(id: string) {
   await getUserId();
   const db = await getDb();
   await db.collection("ChecklistItem").deleteOne({ _id: toMongoId(id) });
-  revalidatePath("/");
+  
 }
 
 // --- User Pomodoro State ---
@@ -485,5 +485,5 @@ export async function updateUserPomodoroState(data: any) {
     { _id: toMongoId(userId) },
     { $set: data }
   );
-  revalidatePath("/");
+  
 }

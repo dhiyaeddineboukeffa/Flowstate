@@ -1,8 +1,10 @@
 "use client";
+import { useFlowStore } from "@/store/useFlowStore";
 
 import { useState, useEffect, useCallback, useTransition, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { ParentTask, SubTask, Session, ChecklistItem } from "@/types";
+import { v4 as uuidv4 } from "uuid";
+import { ParentTask, SubTask, Session, ChecklistItem, FullParentTask, FullSubTask } from "@/types";
 import {
   startSession,
   stopSession,
@@ -71,8 +73,8 @@ import {
   ArrowUpDown,
 } from "lucide-react";
 
-type FullSubTask = SubTask & { checklists: ChecklistItem[] };
-type FullParentTask = ParentTask & { subTasks: FullSubTask[] };
+
+
 type FullSession = Session & { subTask: FullSubTask & { parentTask: ParentTask } };
 
 let sharedAudioContext: AudioContext | null = null;
@@ -136,9 +138,9 @@ export default function FlowStateApp({
   initialRecentSubTaskIds,
   username,
 }: {
-  initialTasks: FullParentTask[];
-  initialActiveSessions: FullSession[];
-  initialTodaySessions: Session[];
+  initialTasks?: FullParentTask[];
+  initialActiveSessions?: FullSession[];
+  initialTodaySessions?: Session[];
   initialPomodoroState?: any;
   initialRecentSubTaskIds?: string[];
   username: string;
@@ -146,17 +148,25 @@ export default function FlowStateApp({
   const router = useRouter();
   const [, startTransition] = useTransition();
 
-  const [tasks, setTasks] = useState(initialTasks);
-  const [activeSessions, setActiveSessions] = useState(initialActiveSessions);
-  const [todaySessions, setTodaySessions] = useState(initialTodaySessions);
-  const [recentSubTaskIds, setRecentSubTaskIds] = useState(initialRecentSubTaskIds || []);
-
+  const store = useFlowStore();
+  const tasks = store.tasks;
+  const setTasks = store.setTasks;
+  const activeSessions = store.activeSessions;
+  const setActiveSessions = store.setActiveSessions;
+  const todaySessions = store.todaySessions;
+  const setTodaySessions = store.setTodaySessions;
+  const recentSubTaskIds = store.recentSubTaskIds;
+  const setRecentSubTaskIds = store.setRecentSubTaskIds;
+  
   useEffect(() => {
-    setTasks(initialTasks);
-    setActiveSessions(initialActiveSessions);
-    setTodaySessions(initialTodaySessions);
-    if (initialRecentSubTaskIds) setRecentSubTaskIds(initialRecentSubTaskIds);
-  }, [initialTasks, initialActiveSessions, initialTodaySessions, initialRecentSubTaskIds]);
+    store.initialize({
+      tasks: initialTasks as any,
+      activeSessions: initialActiveSessions as any,
+      todaySessions: initialTodaySessions,
+      pomodoroState: initialPomodoroState || store.pomodoroState,
+      recentSubTaskIds: initialRecentSubTaskIds || []
+    });
+  }, [initialTasks, initialActiveSessions, initialTodaySessions, initialPomodoroState, initialRecentSubTaskIds, store]);
   const [savedView, setSavedView] = useLocalStorage<{ kind: "projects" | "project" | "timer", parentId?: string, subId?: string }>("fs_savedView", { kind: "projects" });
 
   // Navigation direction for page transitions
@@ -478,7 +488,7 @@ export default function FlowStateApp({
     playFush();
     
     const notesString = updatedJournal.map(e => `[${e.time}] ${e.text}`).join('\n');
-    await updateSessionNotes(currentSessionId, notesString);
+    store.pushSyncOperation("updateSessionNotes", { id: currentSessionId, notes: notesString });
     refresh();
   };
 
@@ -580,9 +590,9 @@ export default function FlowStateApp({
   }, []);
 
   // ─── Effects ─────────────────────────────────────────────────────────────
-  useEffect(() => { setTasks(initialTasks); }, [initialTasks]);
-  useEffect(() => { setActiveSessions(initialActiveSessions); }, [initialActiveSessions]);
-  useEffect(() => { setTodaySessions(initialTodaySessions); }, [initialTodaySessions]);
+  
+  
+  
 
   // Today's stats computation
   const todayTotalSeconds = useMemo(() => todaySessions.reduce((sum, s) => sum + s.duration, 0), [todaySessions]);
@@ -607,7 +617,7 @@ export default function FlowStateApp({
 
 
   // ─── Actions ─────────────────────────────────────────────────────────────
-  const refresh = useCallback(() => { startTransition(() => { router.refresh(); }); }, [router]);
+  const refresh = useCallback(() => { /* local first: do nothing */ }, []);
 
   const doAddProject = async () => {
     const name = newParentName.trim();
@@ -682,7 +692,7 @@ export default function FlowStateApp({
         setIsPaused(false);
         setIsProcessing(false);
         
-        await startSession(subTaskId);
+        store.pushSyncOperation("startSession", { subTaskId: subTaskId });
         refresh();
       }
     }
@@ -709,14 +719,18 @@ export default function FlowStateApp({
       // 1. Find or create "Inbox"
       let inbox = tasks.find(t => t.name.toLowerCase() === "inbox");
       if (!inbox) {
-        const newInbox = await createParentTask("Inbox") as FullParentTask;
+        
+    const inboxId = uuidv4();
+    const newInbox = { id: inboxId, name: "Inbox", subTasks: [], user_id: null, general_notes: null, total_cumulative_time: 0, created_at: new Date() } as FullParentTask;
+    store.pushSyncOperation("createParentTask", { name: "Inbox", id: inboxId });
+
         inbox = newInbox;
         // Optimistic update to prevent being kicked out by the sync useEffect
         setTasks(prev => [...prev, newInbox]);
       }
       
       // 2. Create subtask
-      const subtask = await createSubTask(inbox.id, intentValue.trim());
+      const subtaskId = uuidv4(); const subtask = { id: subtaskId, parent_task_id: inbox.id, name: intentValue.trim(), checklists: [], total_cumulative_time: 0, created_at: new Date() } as FullSubTask; store.pushSyncOperation("createSubTask", { parentId: inbox.id, name: intentValue.trim(), id: subtaskId });
       
       // Optimistic update
       setTasks(prev => prev.map(p => {
@@ -746,8 +760,8 @@ export default function FlowStateApp({
 
   const handleStartWithPause = async () => {
     setActiveSessions([]);
-    for (const s of activeSessions) await stopSession(s.id);
-    if (pendingSubTaskId) await startSession(pendingSubTaskId);
+    for (const s of activeSessions) store.pushSyncOperation("stopSession", s.id);
+    if (pendingSubTaskId) store.pushSyncOperation("startSession", { subTaskId: pendingSubTaskId });
     setConflictModalOpen(false);
     refresh();
   };
@@ -766,7 +780,7 @@ export default function FlowStateApp({
         accumulated_paused_time: 0
       };
       setActiveSessions(prev => [...prev, fakeSession as any]);
-      await startSession(pendingSubTaskId);
+      store.pushSyncOperation("startSession", { subTaskId: pendingSubTaskId });
     }
     setConflictModalOpen(false);
     refresh();
@@ -777,7 +791,7 @@ export default function FlowStateApp({
     setIsPaused(false);
     setActiveSessions(prev => prev.filter(s => s.id !== sessionId));
     
-    await stopSession(sessionId);
+    store.pushSyncOperation("stopSession", sessionId);
     
     if (pomodoroMode) {
       if (!autoPomodoroTransition) {
@@ -794,14 +808,14 @@ export default function FlowStateApp({
   const handlePauseTimer = async (sessionId: string) => {
     setIsPaused(true);
     setActiveSessions(prev => prev.map(s => s.id === sessionId ? { ...s, is_paused: true, last_paused_at: new Date() } : s));
-    await pauseSession(sessionId);
+    store.pushSyncOperation("pauseSession", sessionId);
     refresh();
   };
 
   const handleResumeTimer = async (sessionId: string) => {
     setIsPaused(false);
     setActiveSessions(prev => prev.map(s => s.id === sessionId ? { ...s, is_paused: false, last_paused_at: null } : s));
-    await resumeSession(sessionId);
+    store.pushSyncOperation("resumeSession", sessionId);
     refresh();
   };
 
