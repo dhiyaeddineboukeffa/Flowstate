@@ -9,11 +9,13 @@ export default async function Home() {
   const cookieStore = await cookies();
   const username = cookieStore.get("fs_username")?.value || "User";
 
-  const tasks = await getParentTasks();
-  const activeSessions = await getActiveSessions();
-  const todaySessions = await getTodaySessions();
-  const pomodoroState = await getUserPomodoroState();
-  const recentSubTaskIds = await getRecentSubTaskIds();
+  const [tasks, activeSessions, todaySessions, pomodoroState, recentSubTaskIds] = await Promise.all([
+    getParentTasks(),
+    getActiveSessions(),
+    getTodaySessions(),
+    getUserPomodoroState(),
+    getRecentSubTaskIds()
+  ]);
 
   return (
     <main className="min-h-screen bg-background" suppressHydrationWarning>
