@@ -160,12 +160,7 @@ export default function FlowStateApp({
   const setRecentSubTaskIds = store.setRecentSubTaskIds;
   
   useEffect(() => {
-    if (typeof window !== 'undefined' && !localStorage.getItem('fs_v2_migrated')) {
-      localStorage.clear();
-      localStorage.setItem('fs_v2_migrated', 'true');
-      window.location.reload();
-      return;
-    }
+    
 
     store.initialize({
       tasks: initialTasks as any,
