@@ -150,13 +150,13 @@ export default function FlowStateApp({
   const [, startTransition] = useTransition();
 
   const store = useFlowStore();
-  const tasks = store.tasks;
+  const tasks = store.tasks || [];
   const setTasks = store.setTasks;
-  const activeSessions = store.activeSessions;
+  const activeSessions = store.activeSessions || [];
   const setActiveSessions = store.setActiveSessions;
-  const todaySessions = store.todaySessions;
+  const todaySessions = store.todaySessions || [];
   const setTodaySessions = store.setTodaySessions;
-  const recentSubTaskIds = store.recentSubTaskIds;
+  const recentSubTaskIds = store.recentSubTaskIds || [];
   const setRecentSubTaskIds = store.setRecentSubTaskIds;
   
   useEffect(() => {
@@ -181,7 +181,7 @@ export default function FlowStateApp({
     } else if (savedView.kind === "timer") {
       const parent = tasks.find(t => t.id === savedView.parentId);
       if (parent) {
-        const sub = parent.subTasks.find(s => s.id === savedView.subId);
+        const sub = (parent.subTasks || []).find(s => s.id === savedView.subId);
         if (sub) return { kind: "timer", parent, sub };
       }
     }
@@ -250,7 +250,7 @@ export default function FlowStateApp({
     if (!query || query.length < 1) return [];
     const results: { parent: FullParentTask; sub: SubTask; score: number }[] = [];
     for (const parent of tasks) {
-      for (const sub of parent.subTasks) {
+      for (const sub of (parent.subTasks || []) ) {
         const name = sub.name.toLowerCase();
         if (name.includes(query)) {
           // Prioritize: exact match > starts-with > contains
@@ -296,7 +296,7 @@ export default function FlowStateApp({
   const recentTasks = useMemo(() => {
     const allSubTasks: { parent: FullParentTask; sub: FullSubTask }[] = [];
     tasks.forEach(parent => {
-      parent.subTasks.forEach(sub => {
+      (parent.subTasks || []).forEach(sub => {
         allSubTasks.push({ parent, sub });
       });
     });
@@ -330,7 +330,7 @@ export default function FlowStateApp({
     const fakeId = `temp-${Date.now()}`;
     setTasks(prev => prev.map(p => 
       p.id === view.parent.id 
-        ? { ...p, subTasks: p.subTasks.map(s => s.id === view.sub.id ? { ...s, checklists: [...(s.checklists || []), { id: fakeId, sub_task_id: s.id, text, done: false, created_at: new Date() }] } : s) } 
+        ? { ...p, subTasks: (p.subTasks || []).map(s => s.id === view.sub.id ? { ...s, checklists: [...(s.checklists || []), { id: fakeId, sub_task_id: s.id, text, done: false, created_at: new Date() }] } : s) } 
         : p
     ));
 
@@ -408,7 +408,7 @@ export default function FlowStateApp({
     // Optimistic UI update
     setTasks(prev => prev.map(p => 
       p.id === view.parent.id 
-        ? { ...p, subTasks: p.subTasks.map(s => s.id === view.sub.id ? { ...s, checklists: s.checklists.map(c => c.id === itemId ? { ...c, done: isNowDone } : c) } : s) } 
+        ? { ...p, subTasks: (p.subTasks || []).map(s => s.id === view.sub.id ? { ...s, checklists: s.checklists.map(c => c.id === itemId ? { ...c, done: isNowDone } : c) } : s) } 
         : p
     ));
 
@@ -445,7 +445,7 @@ export default function FlowStateApp({
     // Optimistic UI update
     setTasks(prev => prev.map(p => 
       p.id === view.parent.id 
-        ? { ...p, subTasks: p.subTasks.map(s => s.id === view.sub.id ? { ...s, checklists: s.checklists.filter(c => c.id !== itemId) } : s) } 
+        ? { ...p, subTasks: (p.subTasks || []).map(s => s.id === view.sub.id ? { ...s, checklists: s.checklists.filter(c => c.id !== itemId) } : s) } 
         : p
     ));
 
@@ -655,7 +655,7 @@ export default function FlowStateApp({
     } else if (deleteConfirm.type === "subtask") {
       await deleteSubTask(deleteConfirm.id);
       if (view.kind === "timer") {
-        const parent = tasks.find((t) => t.subTasks.some((s) => s.id === deleteConfirm.id));
+        const parent = tasks.find((t) => (t.subTasks || []).some((s) => s.id === deleteConfirm.id));
         if (parent) setView({ kind: "project", parent });
         else setView({ kind: "projects" });
       }
@@ -1281,7 +1281,7 @@ export default function FlowStateApp({
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {tasks.map((parent) => {
-                  const hasActive = activeSessions.some((s) => parent.subTasks.some((sub) => sub.id === s.sub_task_id));
+                  const hasActive = activeSessions.some((s) => (parent.subTasks || []).some((sub) => sub.id === s.sub_task_id));
                   return (
                     <div
                       key={parent.id}
@@ -1313,7 +1313,7 @@ export default function FlowStateApp({
                         </button>
                       </div>
                       <div className="flex items-center justify-between text-xs text-muted-foreground/80">
-                        <span>{parent.subTasks.length} {parent.subTasks.length === 1 ? "task" : "tasks"}</span>
+                        <span>{(parent.subTasks || []).length} {(parent.subTasks || []).length === 1 ? "task" : "tasks"}</span>
                         <span className="font-mono">{formatShort(parent.total_cumulative_time)}</span>
                       </div>
                     </div>
@@ -1337,7 +1337,7 @@ export default function FlowStateApp({
               </Button>
             </div>
             <p className="text-sm text-muted-foreground/80 mb-6 font-mono">
-              {formatShort(view.parent.total_cumulative_time)} tracked across {view.parent.subTasks.length} tasks
+              {formatShort(view.parent.total_cumulative_time)} tracked across {(view.parent.subTasks || []).length} tasks
             </p>
 
             {/* Notes */}
@@ -1370,7 +1370,7 @@ export default function FlowStateApp({
               </div>
             )}
 
-            {view.parent.subTasks.length === 0 && !showAddSubTask ? (
+            {(view.parent.subTasks || []).length === 0 && !showAddSubTask ? (
               <div className="flex flex-col items-center justify-center py-20 text-center">
                 <div className="w-16 h-16 rounded-2xl bg-surface-overlay border border-surface-border flex items-center justify-center mb-5">
                   <FileText className="w-6 h-6 text-muted-foreground/70" />
@@ -1380,7 +1380,7 @@ export default function FlowStateApp({
               </div>
             ) : (
               <div className="flex flex-col gap-2">
-                {view.parent.subTasks.map((sub) => {
+                {(view.parent.subTasks || []).map((sub) => {
                   const active = activeForSub(sub.id);
                   return (
                     <div
