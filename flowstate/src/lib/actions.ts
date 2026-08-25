@@ -487,3 +487,14 @@ export async function updateUserPomodoroState(data: any) {
   );
   
 }
+
+export async function fetchAllData() {
+  const [tasks, activeSessions, todaySessions, pomodoroState, recentSubTaskIds] = await Promise.all([
+    getParentTasks(),
+    getActiveSessions(),
+    getTodaySessions(),
+    getUserPomodoroState(),
+    getRecentSubTaskIds()
+  ]);
+  return { tasks, activeSessions, todaySessions, pomodoroState, recentSubTaskIds };
+}
