@@ -152,6 +152,17 @@ export default function FlowStateApp({
           recentSubTaskIds: data.recentSubTaskIds,
         });
       }).catch(err => console.error("Failed to fetch data:", err));
+    } else {
+      // Background sync: pull from DB if we are fully synced up
+      if (store.syncQueue.length === 0) {
+        fetchAllData().then(data => {
+          if (useFlowStore.getState().syncQueue.length === 0 && data.tasks && data.tasks.length > 0) {
+            store.setTasks(data.tasks as any);
+            store.setTodaySessions(data.todaySessions as any);
+            store.setRecentSubTaskIds(data.recentSubTaskIds);
+          }
+        }).catch(err => console.log("Offline mode active"));
+      }
     }
   }, []); // Run ONCE on mount
 
