@@ -149,8 +149,7 @@ export default function FlowStateApp({
           tasks: data.tasks as any,
           activeSessions: data.activeSessions as any,
           todaySessions: data.todaySessions as any,
-          pomodoroState: data.pomodoroState,
-          recentSubTaskIds: data.recentSubTaskIds
+          recentSubTaskIds: data.recentSubTaskIds,
         });
       }).catch(err => console.error("Failed to fetch data:", err));
     }
@@ -580,31 +579,31 @@ export default function FlowStateApp({
   const breakStartTime = breakStartTimeState;
   const pomodoroAccumulated = pomodoroAccumulatedState;
   const setPomodoroMode = useCallback((val: boolean | ((prev: boolean) => boolean)) => {
-    setPomodoroModeLocal((prev: boolean) => { const next = typeof val === 'function' ? val(prev) : val; store.pushSyncOperation("updateUserPomodoroState", { pomodoroMode: next }); return next; });
+    setPomodoroModeLocal((prev: boolean) => { const next = typeof val === 'function' ? val(prev) : val; return next; });
   }, []);
   const setWorkDuration = useCallback((val: number | ((prev: number) => number)) => {
-    setWorkDurationLocal((prev: number) => { const next = typeof val === 'function' ? val(prev) : val; store.pushSyncOperation("updateUserPomodoroState", { workDuration: next }); return next; });
+    setWorkDurationLocal((prev: number) => { const next = typeof val === 'function' ? val(prev) : val; return next; });
   }, []);
   const setShortBreakDuration = useCallback((val: number | ((prev: number) => number)) => {
-    setShortBreakDurationLocal((prev: number) => { const next = typeof val === 'function' ? val(prev) : val; store.pushSyncOperation("updateUserPomodoroState", { shortBreakDuration: next }); return next; });
+    setShortBreakDurationLocal((prev: number) => { const next = typeof val === 'function' ? val(prev) : val; return next; });
   }, []);
   const setLongBreakDuration = useCallback((val: number | ((prev: number) => number)) => {
-    setLongBreakDurationLocal((prev: number) => { const next = typeof val === 'function' ? val(prev) : val; store.pushSyncOperation("updateUserPomodoroState", { longBreakDuration: next }); return next; });
+    setLongBreakDurationLocal((prev: number) => { const next = typeof val === 'function' ? val(prev) : val; return next; });
   }, []);
   const setSessionsBeforeLongBreak = useCallback((val: number | ((prev: number) => number)) => {
-    setSessionsBeforeLongBreakLocal((prev: number) => { const next = typeof val === 'function' ? val(prev) : val; store.pushSyncOperation("updateUserPomodoroState", { sessionsBeforeLongBreak: next }); return next; });
+    setSessionsBeforeLongBreakLocal((prev: number) => { const next = typeof val === 'function' ? val(prev) : val; return next; });
   }, []);
   const setPomodoroPhase = useCallback((val: any) => {
-    setPomodoroPhaseLocal((prev: any) => { const next = typeof val === 'function' ? val(prev) : val; store.pushSyncOperation("updateUserPomodoroState", { pomodoroPhase: next }); return next; });
+    setPomodoroPhaseLocal((prev: any) => { const next = typeof val === 'function' ? val(prev) : val; return next; });
   }, []);
   const setPomodorosCompleted = useCallback((val: number | ((prev: number) => number)) => {
-    setPomodorosCompletedLocal((prev: number) => { const next = typeof val === 'function' ? val(prev) : val; store.pushSyncOperation("updateUserPomodoroState", { pomodorosCompleted: next }); return next; });
+    setPomodorosCompletedLocal((prev: number) => { const next = typeof val === 'function' ? val(prev) : val; return next; });
   }, []);
   const setBreakStartTime = useCallback((val: string | null | ((prev: string | null) => string | null)) => {
-    setBreakStartTimeLocal((prev: string | null) => { const next = typeof val === 'function' ? val(prev) : val; store.pushSyncOperation("updateUserPomodoroState", { breakStartTime: next ? new Date(next) : null }); return next; });
+    setBreakStartTimeLocal((prev: string | null) => { const next = typeof val === 'function' ? val(prev) : val; return next; });
   }, []);
   const setPomodoroAccumulated = useCallback((val: number | ((prev: number) => number)) => {
-    setPomodoroAccumulatedLocal((prev: number) => { const next = typeof val === 'function' ? val(prev) : val; store.pushSyncOperation("updateUserPomodoroState", { pomodoroAccumulated: next }); return next; });
+    setPomodoroAccumulatedLocal((prev: number) => { const next = typeof val === 'function' ? val(prev) : val; return next; });
   }, []);
   const [isPaused, setIsPaused] = useLocalStorage("fs_isPaused", false);
 

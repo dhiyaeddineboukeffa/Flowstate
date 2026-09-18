@@ -157,17 +157,17 @@
 
   /* Accent glow behind primary actions */
   .glow-primary {
-    box-shadow: 0 0 30px rgba(124, 58, 237, 0.4), 0 0 60px rgba(124, 58, 237, 0.15);
+    box-shadow: 0 0 10px rgba(124, 58, 237, 0.2);
   }
   .dark .glow-primary {
-    box-shadow: 0 0 40px rgba(124, 58, 237, 0.3), 0 0 80px rgba(124, 58, 237, 0.1);
+    box-shadow: 0 0 15px rgba(124, 58, 237, 0.2);
   }
 
   .glow-primary-sm {
-    box-shadow: 0 0 15px rgba(124, 58, 237, 0.3);
+    box-shadow: 0 0 8px rgba(124, 58, 237, 0.2);
   }
   .dark .glow-primary-sm {
-    box-shadow: 0 0 20px rgba(124, 58, 237, 0.2);
+    box-shadow: 0 0 10px rgba(124, 58, 237, 0.15);
   }
 
   /* Glass card surface — theme-aware */
@@ -179,9 +179,9 @@
     box-shadow: var(--surface-shadow);
   }
 
-  /* Subtle text glow for active timers */
+  /* Text glow for active timer */
   .text-glow {
-    text-shadow: 0 0 30px rgba(124, 58, 237, 0.5), 0 0 60px rgba(124, 58, 237, 0.2);
+    text-shadow: 0 0 10px rgba(124, 58, 237, 0.3);
   }
 
   /* Pulse ring animation for active indicators */
