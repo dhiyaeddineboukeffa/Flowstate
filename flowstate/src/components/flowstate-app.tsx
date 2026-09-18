@@ -1713,13 +1713,13 @@ export default function FlowStateApp({
                           strokeWidth={stroke}
                           strokeLinecap="round"
                           strokeDasharray={`${circumference} ${circumference}`}
-                          style={{ strokeDashoffset, transition: "stroke-dashoffset 1s linear", filter: `drop-shadow(0 0 6px ${glowColor})` }}
+                          style={{ strokeDashoffset, transition: "stroke-dashoffset 1s linear" }}
                           r={normalizedRadius}
                           cx={radius}
                           cy={radius}
                         />
                       </svg>
-                      <div className={`timer-display ${isRunning ? (pomodoroPhase === "work" ? "text-primary text-glow" : "text-blue-400 [text-shadow:0_0_30px_rgba(96,165,250,0.4)]") : "text-muted-foreground/70"}`}>
+                      <div className={`timer-display ${isRunning ? (pomodoroPhase === "work" ? "text-primary text-glow" : "text-blue-400") : "text-muted-foreground/70"}`}>
                         {displayTime}
                       </div>
                     </div>

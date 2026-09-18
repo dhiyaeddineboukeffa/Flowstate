@@ -51,7 +51,7 @@ const SnailSvg = ({ isBreak }: { isBreak: boolean }) => {
       width="80"
       height="40"
       viewBox="0 0 138 67"
-      className="opacity-80 drop-shadow-md"
+      className="opacity-80"
     >
       <g fill="none" fillRule="evenodd" transform="translate(2 2)">
         <g className="left-eye">
