@@ -152,6 +152,7 @@ export interface AnimatedGradientProps {
     style?: CSSProperties;
     className?: string;
     active?: boolean;
+    lowGraphicsMode?: boolean;
 }
 
 export function AnimatedGradient({
@@ -161,6 +162,7 @@ export function AnimatedGradient({
     style,
     className,
     active = true,
+    lowGraphicsMode = false,
 }: AnimatedGradientProps) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -203,7 +205,7 @@ export function AnimatedGradient({
     }, [config]);
 
     useEffect(() => {
-        if (hasWebGLError || isMobile) return;
+        if (hasWebGLError || isMobile || lowGraphicsMode) return;
 
         const canvas = canvasRef.current;
         const container = containerRef.current;
@@ -357,9 +359,9 @@ export function AnimatedGradient({
             console.error("WebGL Initialization Error:", error);
             setHasWebGLError(true);
         }
-    }, [hasWebGLError, isMounted, params, isMobile, active]);
+    }, [hasWebGLError, isMounted, params, isMobile, active, lowGraphicsMode]);
 
-    if (hasWebGLError || isMobile) {
+    if (hasWebGLError || isMobile || lowGraphicsMode) {
         return <WebGLFallback className={cn("absolute inset-0 overflow-hidden", className)} />;
     }
 

@@ -618,8 +618,9 @@ export default function FlowStateApp({
   }, []);
   const [isPaused, setIsPaused] = useLocalStorage("fs_isPaused", false);
 
-  // ─── Theme ────────────────────────────────────────────────────────────────
+  // ─── Theme ────────────────────────────────────────────────────────────────  //  Theme & Graphics 
   const [theme, setTheme] = useLocalStorage<"light" | "dark">("fs_theme", "dark");
+  const [lowGraphicsMode, setLowGraphicsMode] = useLocalStorage("fs_lowGraphicsMode", false);
   useEffect(() => {
     const root = document.documentElement;
     if (theme === "dark") {
@@ -1203,11 +1204,13 @@ export default function FlowStateApp({
       <AnimatedGradient 
         config={workGradientConfig as any}
         active={pomodoroPhase === "work"}
+        lowGraphicsMode={lowGraphicsMode}
         className={`fixed inset-0 z-[-1] transition-opacity duration-[5000ms] ease-in-out pointer-events-none ${pomodoroPhase === "work" ? (theme === "light" ? "opacity-100" : "opacity-30") : "opacity-0"}`}
       />
       <AnimatedGradient 
         config={breakGradientConfig as any}
         active={pomodoroPhase !== "work"}
+        lowGraphicsMode={lowGraphicsMode}
         className={`fixed inset-0 z-[-1] transition-opacity duration-[5000ms] ease-in-out pointer-events-none ${pomodoroPhase !== "work" ? (theme === "light" ? "opacity-100" : "opacity-30") : "opacity-0"}`}
       />
 
@@ -2169,6 +2172,20 @@ export default function FlowStateApp({
                 >
                   <Moon className="w-3 h-3" /> Dark
                 </button>
+              </div>
+            </div>
+
+            {/* Low Graphics Mode Toggle */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Zap className="w-4 h-4 text-primary" />
+                <span className="text-sm font-medium">Low Graphics Mode</span>
+              </div>
+              <div 
+                onClick={() => setLowGraphicsMode(!lowGraphicsMode)}
+                className={`w-9 h-5 rounded-full flex items-center px-0.5 cursor-pointer transition-colors border border-surface-border ${lowGraphicsMode ? 'bg-primary/80 border-primary/80' : 'bg-black/10 dark:bg-white/10'}`}
+              >
+                <div className={`w-4 h-4 rounded-full bg-white transition-transform ${lowGraphicsMode ? 'translate-x-[14px]' : 'translate-x-0'} shadow-sm`} />
               </div>
             </div>
 
