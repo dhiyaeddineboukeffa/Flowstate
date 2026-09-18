@@ -2,32 +2,15 @@
 import { fetchAllData, loginUser } from "@/lib/actions";
 import { useFlowStore } from "@/store/useFlowStore";
 
-import { useState, useEffect, useCallback, useTransition, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { v4 as uuidv4 } from "uuid";
 import { ParentTask, SubTask, Session, ChecklistItem, FullParentTask, FullSubTask } from "@/types";
 import {
-  startSession,
-  stopSession,
-  pauseSession,
-  resumeSession,
-  createParentTask,
-  createSubTask,
-  renameParentTask,
-  renameSubTask,
-  deleteParentTask,
-  deleteSubTask,
-  deleteSession,
-  updateParentTaskNotes,
-  updateSessionNotes,
   updateSessionTime,
   getSubTaskSessions,
-  createChecklistItem,
-  toggleChecklistItem,
-  deleteChecklistItem,
   logoutUser,
   getUserPomodoroState,
-  updateUserPomodoroState,
 } from "@/lib/actions";
 import { cn } from "@/lib/utils";
 import { useLocalStorage } from "@/hooks/use-local-storage";
@@ -147,7 +130,7 @@ export default function FlowStateApp({
   username: string;
 }) {
   const router = useRouter();
-  const [, startTransition] = useTransition();
+
 
   const store = useFlowStore();
   const tasks = store.tasks || [];
@@ -414,7 +397,7 @@ export default function FlowStateApp({
     ));
 
     store.pushSyncOperation("createChecklistItem", { subTaskId: view.sub.id, text });
-    refresh();
+
   };
 
   const playPing = useCallback(() => {
@@ -515,7 +498,7 @@ export default function FlowStateApp({
     }
 
     store.pushSyncOperation("toggleChecklistItem", { id: itemId, done: isNowDone });
-    refresh();
+
   };
 
   const removeChecklistItem = async (itemId: string) => {
@@ -529,7 +512,7 @@ export default function FlowStateApp({
     ));
 
     store.pushSyncOperation("deleteChecklistItem", itemId);
-    refresh();
+
   };
 
   // ─── Session Journal State ────────
@@ -569,7 +552,7 @@ export default function FlowStateApp({
     
     const notesString = updatedJournal.map(e => `[${e.time}] ${e.text}`).join('\n');
     store.pushSyncOperation("updateSessionNotes", { id: currentSessionId, notes: notesString });
-    refresh();
+
   };
 
   // ─── Pomodoro State ──────────────────────────────────────────────────────
@@ -597,31 +580,31 @@ export default function FlowStateApp({
   const breakStartTime = breakStartTimeState;
   const pomodoroAccumulated = pomodoroAccumulatedState;
   const setPomodoroMode = useCallback((val: boolean | ((prev: boolean) => boolean)) => {
-    setPomodoroModeLocal((prev: boolean) => { const next = typeof val === 'function' ? val(prev) : val; setTimeout(() => startTransition(() => { updateUserPomodoroState({ pomodoroMode: next }) }), 0); return next; });
+    setPomodoroModeLocal((prev: boolean) => { const next = typeof val === 'function' ? val(prev) : val; store.pushSyncOperation("updateUserPomodoroState", { pomodoroMode: next }); return next; });
   }, []);
   const setWorkDuration = useCallback((val: number | ((prev: number) => number)) => {
-    setWorkDurationLocal((prev: number) => { const next = typeof val === 'function' ? val(prev) : val; setTimeout(() => startTransition(() => { updateUserPomodoroState({ workDuration: next }) }), 0); return next; });
+    setWorkDurationLocal((prev: number) => { const next = typeof val === 'function' ? val(prev) : val; store.pushSyncOperation("updateUserPomodoroState", { workDuration: next }); return next; });
   }, []);
   const setShortBreakDuration = useCallback((val: number | ((prev: number) => number)) => {
-    setShortBreakDurationLocal((prev: number) => { const next = typeof val === 'function' ? val(prev) : val; setTimeout(() => startTransition(() => { updateUserPomodoroState({ shortBreakDuration: next }) }), 0); return next; });
+    setShortBreakDurationLocal((prev: number) => { const next = typeof val === 'function' ? val(prev) : val; store.pushSyncOperation("updateUserPomodoroState", { shortBreakDuration: next }); return next; });
   }, []);
   const setLongBreakDuration = useCallback((val: number | ((prev: number) => number)) => {
-    setLongBreakDurationLocal((prev: number) => { const next = typeof val === 'function' ? val(prev) : val; setTimeout(() => startTransition(() => { updateUserPomodoroState({ longBreakDuration: next }) }), 0); return next; });
+    setLongBreakDurationLocal((prev: number) => { const next = typeof val === 'function' ? val(prev) : val; store.pushSyncOperation("updateUserPomodoroState", { longBreakDuration: next }); return next; });
   }, []);
   const setSessionsBeforeLongBreak = useCallback((val: number | ((prev: number) => number)) => {
-    setSessionsBeforeLongBreakLocal((prev: number) => { const next = typeof val === 'function' ? val(prev) : val; setTimeout(() => startTransition(() => { updateUserPomodoroState({ sessionsBeforeLongBreak: next }) }), 0); return next; });
+    setSessionsBeforeLongBreakLocal((prev: number) => { const next = typeof val === 'function' ? val(prev) : val; store.pushSyncOperation("updateUserPomodoroState", { sessionsBeforeLongBreak: next }); return next; });
   }, []);
   const setPomodoroPhase = useCallback((val: any) => {
-    setPomodoroPhaseLocal((prev: any) => { const next = typeof val === 'function' ? val(prev) : val; setTimeout(() => startTransition(() => { updateUserPomodoroState({ pomodoroPhase: next }) }), 0); return next; });
+    setPomodoroPhaseLocal((prev: any) => { const next = typeof val === 'function' ? val(prev) : val; store.pushSyncOperation("updateUserPomodoroState", { pomodoroPhase: next }); return next; });
   }, []);
   const setPomodorosCompleted = useCallback((val: number | ((prev: number) => number)) => {
-    setPomodorosCompletedLocal((prev: number) => { const next = typeof val === 'function' ? val(prev) : val; setTimeout(() => startTransition(() => { updateUserPomodoroState({ pomodorosCompleted: next }) }), 0); return next; });
+    setPomodorosCompletedLocal((prev: number) => { const next = typeof val === 'function' ? val(prev) : val; store.pushSyncOperation("updateUserPomodoroState", { pomodorosCompleted: next }); return next; });
   }, []);
   const setBreakStartTime = useCallback((val: string | null | ((prev: string | null) => string | null)) => {
-    setBreakStartTimeLocal((prev: string | null) => { const next = typeof val === 'function' ? val(prev) : val; setTimeout(() => startTransition(() => { updateUserPomodoroState({ breakStartTime: next ? new Date(next) : null }) }), 0); return next; });
+    setBreakStartTimeLocal((prev: string | null) => { const next = typeof val === 'function' ? val(prev) : val; store.pushSyncOperation("updateUserPomodoroState", { breakStartTime: next ? new Date(next) : null }); return next; });
   }, []);
   const setPomodoroAccumulated = useCallback((val: number | ((prev: number) => number)) => {
-    setPomodoroAccumulatedLocal((prev: number) => { const next = typeof val === 'function' ? val(prev) : val; setTimeout(() => startTransition(() => { updateUserPomodoroState({ pomodoroAccumulated: next }) }), 0); return next; });
+    setPomodoroAccumulatedLocal((prev: number) => { const next = typeof val === 'function' ? val(prev) : val; store.pushSyncOperation("updateUserPomodoroState", { pomodoroAccumulated: next }); return next; });
   }, []);
   const [isPaused, setIsPaused] = useLocalStorage("fs_isPaused", false);
 
@@ -698,7 +681,7 @@ export default function FlowStateApp({
 
 
   // ─── Actions ─────────────────────────────────────────────────────────────
-  const refresh = useCallback(() => { /* local first: do nothing */ }, []);
+
 
   const doAddProject = async () => {
     const name = newParentName.trim();
@@ -851,13 +834,9 @@ export default function FlowStateApp({
           last_paused_at: null,
           accumulated_paused_time: 0
         };
-        startTransition(() => {
-          setActiveSessions(prev => [...prev, fakeSession as any]);
-          setIsPaused(false);
-          store.pushSyncOperation("startSession", { subTaskId: subTaskId, sessionId: fakeSession.id });
-        });
+        store.batchStartSession({ fakeSession });
+        setIsPaused(false);
         setIsProcessing(false);
-        refresh();
       }
     }
   };
@@ -911,36 +890,34 @@ export default function FlowStateApp({
     }
   };
 
-  const handleStartWithPause = async () => {
-    startTransition(() => {
-      setActiveSessions([]);
-      for (const s of activeSessions) store.pushSyncOperation("stopSession", s.id);
-      if (pendingSubTaskId) store.pushSyncOperation("startSession", { subTaskId: pendingSubTaskId, sessionId: "temp-" + Date.now() });
-      setConflictModalOpen(false);
-    });
-    refresh();
-  };
-
-  const handleStartConcurrent = async () => {
+  const handleStartWithPause = () => {
+    for (const s of activeSessions) store.pushSyncOperation("stopSession", s.id);
+    setActiveSessions([]);
     if (pendingSubTaskId) {
       const fakeSession = {
         id: "temp-" + Date.now(),
         sub_task_id: pendingSubTaskId,
         start_time: new Date(),
-        end_time: null,
-        duration: 0,
-        session_notes: null,
-        is_paused: false,
-        last_paused_at: null,
-        accumulated_paused_time: 0
+        end_time: null, duration: 0, session_notes: null,
+        is_paused: false, last_paused_at: null, accumulated_paused_time: 0
       };
-      startTransition(() => {
-        setActiveSessions(prev => [...prev, fakeSession as any]);
-        store.pushSyncOperation("startSession", { subTaskId: pendingSubTaskId, sessionId: fakeSession.id });
-        setConflictModalOpen(false);
-      });
+      store.batchStartSession({ fakeSession });
     }
-    refresh();
+    setConflictModalOpen(false);
+  };
+
+  const handleStartConcurrent = () => {
+    if (pendingSubTaskId) {
+      const fakeSession = {
+        id: "temp-" + Date.now(),
+        sub_task_id: pendingSubTaskId,
+        start_time: new Date(),
+        end_time: null, duration: 0, session_notes: null,
+        is_paused: false, last_paused_at: null, accumulated_paused_time: 0
+      };
+      store.batchStartSession({ fakeSession });
+    }
+    setConflictModalOpen(false);
   };
   const stoppingRef = useRef<Set<string>>(new Set());
 
@@ -948,8 +925,6 @@ export default function FlowStateApp({
     if (stoppingRef.current.has(sessionId)) return;
     stoppingRef.current.add(sessionId);
 
-    setIsProcessing(true);
-    
     const sessionToStop = activeSessions.find(s => s.id === sessionId);
     if (sessionToStop) {
       const end_time = new Date();
@@ -969,75 +944,54 @@ export default function FlowStateApp({
         last_paused_at: null
       };
 
-      startTransition(() => {
-        setIsPaused(false);
-        setActiveSessions(prev => prev.filter(s => s.id !== sessionId));
-        setTodaySessions(prev => [stoppedSession as any, ...prev]);
-        setSubTaskHistory(prev => {
-          if (view.kind === "timer" && view.sub.id === sessionToStop.sub_task_id) {
-            return [stoppedSession as any, ...prev];
-          }
-          return prev;
-        });
-
-        setTasks(prevTasks => prevTasks.map(pt => {
-          let updatedPt = false;
-          const newSubTasks = pt.subTasks?.map(st => {
-            if (st.id === sessionToStop.sub_task_id) {
-              updatedPt = true;
-              return { ...st, total_cumulative_time: (st.total_cumulative_time || 0) + duration };
-            }
-            return st;
-          });
-          if (updatedPt) {
-            return { ...pt, total_cumulative_time: (pt.total_cumulative_time || 0) + duration, subTasks: newSubTasks };
-          }
-          return pt;
-        }));
-        
-        store.pushSyncOperation("stopSession", sessionId);
-        
-        if (pomodoroMode) {
-          if (!autoPomodoroTransition) {
-            setPomodoroPhase("work");
-            setBreakStartTime(null);
-            setPomodoroAccumulated(0);
-          }
-        }
+      // Single batch update: activeSessions + todaySessions + tasks + syncQueue in ONE set()
+      store.batchStopSession({
+        sessionId,
+        stoppedSession,
+        subTaskId: sessionToStop.sub_task_id,
+        duration,
       });
+
+      // These are local-only React state, not Zustand — they're cheap
+      setIsPaused(false);
+      setSubTaskHistory(prev => {
+        if (view.kind === "timer" && view.sub.id === sessionToStop.sub_task_id) {
+          return [stoppedSession as any, ...prev];
+        }
+        return prev;
+      });
+      
+      if (pomodoroMode && !autoPomodoroTransition) {
+        setPomodoroPhase("work");
+        setBreakStartTime(null);
+        setPomodoroAccumulated(0);
+      }
     }
     
     setIsProcessing(false);
-    refresh();
   };
 
-  const handlePauseTimer = async (sessionId: string) => {
-    startTransition(() => {
-      setIsPaused(true);
-      setActiveSessions(prev => prev.map(s => s.id === sessionId ? { ...s, is_paused: true, last_paused_at: new Date() } : s));
-      store.pushSyncOperation("pauseSession", sessionId);
-    });
-    refresh();
+  const handlePauseTimer = (sessionId: string) => {
+    setIsPaused(true);
+    setActiveSessions(prev => prev.map(s => s.id === sessionId ? { ...s, is_paused: true, last_paused_at: new Date() } : s));
+    store.pushSyncOperation("pauseSession", sessionId);
   };
 
-  const handleResumeTimer = async (sessionId: string) => {
-    startTransition(() => {
-      setIsPaused(false);
-      setActiveSessions(prev => prev.map(s => {
-        if (s.id === sessionId && s.is_paused && s.last_paused_at) {
-          const pausedDuration = Math.round((new Date().getTime() - new Date(s.last_paused_at).getTime()) / 1000);
-          return { 
-            ...s, 
-            is_paused: false, 
-            last_paused_at: null,
-            accumulated_paused_time: (s.accumulated_paused_time || 0) + pausedDuration
-          };
-        }
-        return s;
-      }));
-      store.pushSyncOperation("resumeSession", sessionId);
-    });
-    refresh();
+  const handleResumeTimer = (sessionId: string) => {
+    setIsPaused(false);
+    setActiveSessions(prev => prev.map(s => {
+      if (s.id === sessionId && s.is_paused && s.last_paused_at) {
+        const pausedDuration = Math.round((new Date().getTime() - new Date(s.last_paused_at).getTime()) / 1000);
+        return { 
+          ...s, 
+          is_paused: false, 
+          last_paused_at: null,
+          accumulated_paused_time: (s.accumulated_paused_time || 0) + pausedDuration
+        };
+      }
+      return s;
+    }));
+    store.pushSyncOperation("resumeSession", sessionId);
   };
 
   const skipBreak = () => {
@@ -1061,7 +1015,7 @@ export default function FlowStateApp({
       await updateSessionTime(editingSession.id, new Date(editStartTime), end, parseInt(editDurationStr, 10));
       toast.success("Session updated");
       setEditSessionOpen(false);
-      refresh();
+  
     } catch { toast.error("Failed to update session"); }
   };
 
@@ -1585,7 +1539,7 @@ export default function FlowStateApp({
                 placeholder="Notes for this project..."
                 defaultValue={view.parent.general_notes || ""}
                 key={`pn-${view.parent.id}`}
-                onBlur={(e) => updateParentTaskNotes(view.parent.id, e.target.value)}
+                onBlur={(e) => store.pushSyncOperation("updateParentTaskNotes", { id: view.parent.id, notes: e.target.value })}
               />
             </div>
 

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
-import type { ParentTask, Session, FullParentTask, StoreFullSession } from "@/types"; // Ensure these types exist or update them
+import { persist, createJSONStorage, type StateStorage } from 'zustand/middleware';
+import type { ParentTask, Session, FullParentTask, StoreFullSession } from "@/types";
 
 interface SyncOperation {
   id: string;
@@ -8,6 +8,34 @@ interface SyncOperation {
   payload: any;
   timestamp: number;
 }
+
+// ─── Debounced localStorage adapter ────────────────────────────────────────
+// Instead of writing to localStorage on every micro-update (which blocks the
+// main thread with JSON.stringify of the entire state), we debounce writes
+// so that rapid-fire state updates (like stopping a timer) only trigger ONE
+// serialization + write after all updates have settled.
+let pendingWrite: ReturnType<typeof setTimeout> | null = null;
+let writeCache: Record<string, string> = {};
+
+const debouncedStorage: StateStorage = {
+  getItem: (name: string) => {
+    return localStorage.getItem(name);
+  },
+  setItem: (name: string, value: string) => {
+    writeCache[name] = value;
+    if (pendingWrite) clearTimeout(pendingWrite);
+    pendingWrite = setTimeout(() => {
+      for (const [k, v] of Object.entries(writeCache)) {
+        localStorage.setItem(k, v);
+      }
+      writeCache = {};
+      pendingWrite = null;
+    }, 150); // Wait 150ms for all state updates to settle, then write once
+  },
+  removeItem: (name: string) => {
+    localStorage.removeItem(name);
+  },
+};
 
 interface FlowState {
   tasks: FullParentTask[];
@@ -30,6 +58,30 @@ interface FlowState {
   // Queue operations
   pushSyncOperation: (action: string, payload: any) => void;
   removeSyncOperations: (ids: string[]) => void;
+
+  // ─── Composite batch actions ───────────────────────────────────────────
+  // These update multiple slices of state in a SINGLE set() call,
+  // so Zustand's persist middleware only serializes + writes ONCE.
+  
+  batchStopSession: (params: {
+    sessionId: string;
+    stoppedSession: any;
+    subTaskId: string;
+    duration: number;
+  }) => void;
+
+  batchStartSession: (params: {
+    fakeSession: any;
+  }) => void;
+}
+
+function makeSyncOp(action: string, payload: any): SyncOperation {
+  return {
+    id: Math.random().toString(36).substring(7),
+    action,
+    payload,
+    timestamp: Date.now(),
+  };
 }
 
 export const useFlowStore = create<FlowState>()(
@@ -84,21 +136,55 @@ export const useFlowStore = create<FlowState>()(
       pushSyncOperation: (action, payload) => set((state) => ({
         syncQueue: [
           ...state.syncQueue,
-          {
-            id: Math.random().toString(36).substring(7),
-            action,
-            payload,
-            timestamp: Date.now()
-          }
+          makeSyncOp(action, payload)
         ]
       })),
       
       removeSyncOperations: (ids) => set((state) => ({
         syncQueue: state.syncQueue.filter(op => !ids.includes(op.id))
-      }))
+      })),
+
+      // ─── Composite: Stop a session ──────────────────────────────────────
+      // Updates activeSessions, todaySessions, tasks, and syncQueue in ONE set().
+      batchStopSession: ({ sessionId, stoppedSession, subTaskId, duration }) => set((state) => {
+        const newActiveSessions = state.activeSessions.filter(s => s.id !== sessionId);
+        const newTodaySessions = [stoppedSession as any, ...state.todaySessions];
+        const newTasks = state.tasks.map(pt => {
+          let updatedPt = false;
+          const newSubTasks = pt.subTasks?.map((st: any) => {
+            if (st.id === subTaskId) {
+              updatedPt = true;
+              return { ...st, total_cumulative_time: (st.total_cumulative_time || 0) + duration };
+            }
+            return st;
+          });
+          if (updatedPt) {
+            return { ...pt, total_cumulative_time: (pt.total_cumulative_time || 0) + duration, subTasks: newSubTasks };
+          }
+          return pt;
+        });
+        const newSyncQueue = [...state.syncQueue, makeSyncOp("stopSession", sessionId)];
+
+        return {
+          activeSessions: newActiveSessions,
+          todaySessions: newTodaySessions,
+          tasks: newTasks,
+          syncQueue: newSyncQueue,
+        };
+      }),
+
+      // ─── Composite: Start a session ─────────────────────────────────────
+      batchStartSession: ({ fakeSession }) => set((state) => ({
+        activeSessions: [...state.activeSessions, fakeSession as any],
+        syncQueue: [
+          ...state.syncQueue,
+          makeSyncOp("startSession", { subTaskId: fakeSession.sub_task_id, sessionId: fakeSession.id })
+        ],
+      })),
     }),
     {
       name: 'flowstate-storage',
+      storage: createJSONStorage(() => debouncedStorage),
     }
   )
 );
