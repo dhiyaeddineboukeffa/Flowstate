@@ -78,6 +78,7 @@ export default function SyncProvider({ children }: { children: React.ReactNode }
               case 'updateParentTaskNotes':
                 await updateParentTaskNotes(op.payload.id, op.payload.notes);
                 break;
+            }
           } catch (err) {
             console.error("Failed to sync operation:", op, err);
             // We could optionally break here and leave it in the queue to retry
