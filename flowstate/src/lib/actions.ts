@@ -107,37 +107,6 @@ export async function getParentTasks() {
   return formattedTasks;
 }
 
-export async function getActiveSessions() {
-  const userId = await getUserId();
-  const db = await getDb();
-  
-  const userParents = await db.collection("ParentTask").find({ user_id: toMongoId(userId) }).toArray();
-  const userSubTasks = await db.collection("SubTask").find({ parent_task_id: { $in: userParents.map(p => p._id) } }).toArray();
-  const subTaskIds = userSubTasks.map(s => s._id);
-  
-  const sessions = await db.collection("Session").find({ 
-    end_time: null,
-    sub_task_id: { $in: subTaskIds }
-  }).toArray();
-  
-  const checklists = await db.collection("ChecklistItem").find({ sub_task_id: { $in: subTaskIds } }).toArray();
-  
-  const formattedSessions = sessions.map(s => {
-    const sub = userSubTasks.find(sub => sub._id.toString() === s.sub_task_id.toString());
-    const parent = userParents.find(p => p._id.toString() === sub?.parent_task_id.toString());
-    return {
-      ...mapId(s),
-      subTask: {
-        ...mapId(sub),
-        parentTask: mapId(parent),
-        checklists: checklists.filter(c => c.sub_task_id.toString() === sub?._id.toString()).map(mapId)
-      }
-    };
-  });
-  
-  return formattedSessions;
-}
-
 export async function getSubTaskSessions(sub_task_id: string) {
   const userId = await getUserId();
   const db = await getDb();
@@ -492,12 +461,11 @@ export async function updateUserPomodoroState(data: any) {
 }
 
 export async function fetchAllData() {
-  const [tasks, activeSessions, todaySessions, pomodoroState, recentSubTaskIds] = await Promise.all([
+  const [tasks, todaySessions, pomodoroState, recentSubTaskIds] = await Promise.all([
     getParentTasks(),
-    getActiveSessions(),
     getTodaySessions(),
     getUserPomodoroState(),
     getRecentSubTaskIds()
   ]);
-  return { tasks, activeSessions, todaySessions, pomodoroState, recentSubTaskIds };
+  return { tasks, activeSessions: [], todaySessions, pomodoroState, recentSubTaskIds };
 }

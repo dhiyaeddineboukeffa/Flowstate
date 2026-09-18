@@ -2,7 +2,7 @@
 import { fetchAllData, loginUser } from "@/lib/actions";
 import { useFlowStore } from "@/store/useFlowStore";
 
-import { useState, useEffect, useCallback, useTransition, useMemo } from "react";
+import { useState, useEffect, useCallback, useTransition, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { v4 as uuidv4 } from "uuid";
 import { ParentTask, SubTask, Session, ChecklistItem, FullParentTask, FullSubTask } from "@/types";
@@ -239,19 +239,25 @@ export default function FlowStateApp({
     return { kind: "projects" };
   }, [savedView, tasks]);
 
-  const setView = useCallback((newView: View, direction?: "forward" | "back") => {
+  const setView = useCallback((newView: View, direction?: "forward" | "back", skipHistory = false) => {
     const dir = direction ?? (newView.kind === "projects" ? "back" : "forward");
     setNavDirection(dir);
     setIsTransitioning(true);
+
+    let stateToSave: any = { kind: "projects" };
+    if (newView.kind === "project") {
+      stateToSave = { kind: "project", parentId: newView.parent.id };
+    } else if (newView.kind === "timer") {
+      stateToSave = { kind: "timer", parentId: newView.parent.id, subId: newView.sub.id };
+    }
+
+    if (!skipHistory && typeof window !== "undefined") {
+      window.history.pushState({ fsView: stateToSave }, "", "#" + stateToSave.kind);
+    }
+
     // Small delay to let exit animation play, then switch
     setTimeout(() => {
-      if (newView.kind === "projects") {
-        setSavedView({ kind: "projects" });
-      } else if (newView.kind === "project") {
-        setSavedView({ kind: "project", parentId: newView.parent.id });
-      } else if (newView.kind === "timer") {
-        setSavedView({ kind: "timer", parentId: newView.parent.id, subId: newView.sub.id });
-      }
+      setSavedView(stateToSave);
       // Trigger enter animation
       requestAnimationFrame(() => {
         setNavDirection(dir);
@@ -259,6 +265,28 @@ export default function FlowStateApp({
       });
     }, 150);
   }, [setSavedView]);
+
+  useEffect(() => {
+    const handlePopState = (event: PopStateEvent) => {
+      const stateView = event.state?.fsView || { kind: "projects" };
+      setNavDirection("back");
+      setIsTransitioning(true);
+      setTimeout(() => {
+        setSavedView(stateView);
+        requestAnimationFrame(() => {
+          setNavDirection("back");
+          setIsTransitioning(false);
+        });
+      }, 150);
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    if (typeof window !== "undefined" && (!window.history.state || !window.history.state.fsView)) {
+      window.history.replaceState({ fsView: savedView }, "", "#" + savedView.kind);
+    }
+
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [setSavedView, savedView]);
   const [subTaskHistory, setSubTaskHistory] = useState<Session[]>([]);
   const [currentTime, setCurrentTime] = useState(new Date());
 
@@ -650,13 +678,14 @@ export default function FlowStateApp({
   const todayTotalSeconds = useMemo(() => todaySessions.reduce((sum, s) => sum + s.duration, 0), [todaySessions]);
   const todaySessionCount = todaySessions.length;
 
+  const activeSubTaskId = view.kind === "timer" ? view.sub.id : null;
   useEffect(() => {
-    if (view.kind === "timer") {
-      getSubTaskSessions(view.sub.id).then(setSubTaskHistory);
+    if (activeSubTaskId) {
+      getSubTaskSessions(activeSubTaskId).then(setSubTaskHistory);
     } else {
       setSubTaskHistory([]);
     }
-  }, [view, activeSessions]);
+  }, [activeSubTaskId]);
 
   // Close context menu on click anywhere
   useEffect(() => {
@@ -919,8 +948,12 @@ export default function FlowStateApp({
     setConflictModalOpen(false);
     refresh();
   };
+  const stoppingRef = useRef<Set<string>>(new Set());
 
   const handleStopTimer = async (sessionId: string, autoPomodoroTransition = false) => {
+    if (stoppingRef.current.has(sessionId)) return;
+    stoppingRef.current.add(sessionId);
+
     setIsProcessing(true);
     setIsPaused(false);
     
@@ -945,6 +978,12 @@ export default function FlowStateApp({
 
       setActiveSessions(prev => prev.filter(s => s.id !== sessionId));
       setTodaySessions(prev => [stoppedSession as any, ...prev]);
+      setSubTaskHistory(prev => {
+        if (view.kind === "timer" && view.sub.id === sessionToStop.sub_task_id) {
+          return [stoppedSession as any, ...prev];
+        }
+        return prev;
+      });
 
       setTasks(prevTasks => prevTasks.map(pt => {
         let updatedPt = false;
@@ -1134,7 +1173,7 @@ export default function FlowStateApp({
         worker.terminate();
       }
     };
-  }, [pomodoroMode, pomodoroPhase, activeSessions, workDuration, shortBreakDuration, longBreakDuration, breakStartTime, playNotification]);
+  }, [pomodoroMode, pomodoroPhase, activeSessions, workDuration, shortBreakDuration, longBreakDuration, breakStartTime, playNotification, pomodoroAccumulated, pomodorosCompleted]);
 
 
   const workGradientConfig = useMemo(() => ({
