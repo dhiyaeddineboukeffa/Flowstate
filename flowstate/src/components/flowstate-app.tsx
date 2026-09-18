@@ -1091,6 +1091,19 @@ export default function FlowStateApp({
   };
 
   // ─── Timer Interval ──────────────────────────────────────────────────────
+  const stateRef = useRef({
+    pomodoroMode, pomodoroPhase, activeSessions, workDuration, shortBreakDuration, 
+    longBreakDuration, breakStartTime, pomodoroAccumulated, pomodorosCompleted, sessionsBeforeLongBreak
+  });
+  useEffect(() => {
+    stateRef.current = {
+      pomodoroMode, pomodoroPhase, activeSessions, workDuration, shortBreakDuration, 
+      longBreakDuration, breakStartTime, pomodoroAccumulated, pomodorosCompleted, sessionsBeforeLongBreak
+    };
+  });
+  const handleStopTimerRef = useRef(handleStopTimer);
+  useEffect(() => { handleStopTimerRef.current = handleStopTimer; });
+
   useEffect(() => {
     if (typeof window === "undefined") return;
 
@@ -1101,19 +1114,19 @@ export default function FlowStateApp({
       worker = new Worker("/timer-worker.js");
       
       worker.onmessage = (e) => {
-        if (hasAutoStopped) return; // Drop all subsequent backlog messages for this phase!
+        if (hasAutoStopped) return;
 
         if (e.data === 'tick') {
           const now = new Date();
           setCurrentTime(now);
 
-          if (pomodoroMode) {
-            if (pomodoroPhase === "work") {
-              if (activeSessions.length > 0) {
-                // Check all active sessions. If any session hits the target, stop ALL.
+          const st = stateRef.current;
+
+          if (st.pomodoroMode) {
+            if (st.pomodoroPhase === "work") {
+              if (st.activeSessions.length > 0) {
                 let shouldStopAll = false;
-                for (const session of activeSessions) {
-                  // Replicate getLive manually since we are outside React render cycle
+                for (const session of st.activeSessions) {
                   let elapsed = 0;
                   if (session.is_paused && session.last_paused_at) {
                     elapsed = Math.max(0, Math.floor((new Date(session.last_paused_at).getTime() - new Date(session.start_time).getTime()) / 1000) - session.accumulated_paused_time);
@@ -1121,7 +1134,7 @@ export default function FlowStateApp({
                     elapsed = Math.max(0, Math.floor((now.getTime() - new Date(session.start_time).getTime()) / 1000) - session.accumulated_paused_time);
                   }
                   
-                  if (elapsed + pomodoroAccumulated >= workDuration * 60) {
+                  if (elapsed + st.pomodoroAccumulated >= st.workDuration * 60) {
                     shouldStopAll = true;
                     break;
                   }
@@ -1131,22 +1144,21 @@ export default function FlowStateApp({
                   hasAutoStopped = true;
                   playNotification();
                   
-                  const newCompleted = pomodorosCompleted + 1;
+                  const newCompleted = st.pomodorosCompleted + 1;
                   setPomodorosCompleted(newCompleted);
-                  const isLongBreak = newCompleted % sessionsBeforeLongBreak === 0;
+                  const isLongBreak = newCompleted % st.sessionsBeforeLongBreak === 0;
                   setPomodoroPhase(isLongBreak ? "long_break" : "short_break");
                   setBreakStartTime(new Date().toISOString());
                   setPomodoroAccumulated(0);
                   toast.success("Focus session complete! Time for a break.");
                   
-                  activeSessions.forEach(s => handleStopTimer(s.id, true));
+                  st.activeSessions.forEach(s => handleStopTimerRef.current(s.id, true));
                 }
               }
             } else {
-              // Break phase
-              if (breakStartTime) {
-                const elapsed = Math.floor((now.getTime() - new Date(breakStartTime).getTime()) / 1000);
-                const target = (pomodoroPhase === "long_break" ? longBreakDuration : shortBreakDuration) * 60;
+              if (st.breakStartTime) {
+                const elapsed = Math.floor((now.getTime() - new Date(st.breakStartTime).getTime()) / 1000);
+                const target = (st.pomodoroPhase === "long_break" ? st.longBreakDuration : st.shortBreakDuration) * 60;
                 if (elapsed >= target) {
                   hasAutoStopped = true;
                   playNotification();
@@ -1162,14 +1174,7 @@ export default function FlowStateApp({
 
       worker.postMessage('start');
     } catch (e) {
-      console.warn("Worker not supported or failed to load, falling back to setInterval", e);
-      // Fallback
-      const interval = setInterval(() => {
-        const now = new Date();
-        setCurrentTime(now);
-        // Fallback logic omitted for brevity, worker should always work in modern browsers
-      }, 1000);
-      return () => clearInterval(interval);
+      console.warn("Worker not supported", e);
     }
 
     return () => {
@@ -1178,7 +1183,7 @@ export default function FlowStateApp({
         worker.terminate();
       }
     };
-  }, [pomodoroMode, pomodoroPhase, activeSessions, workDuration, shortBreakDuration, longBreakDuration, breakStartTime, playNotification, pomodoroAccumulated, pomodorosCompleted]);
+  }, [playNotification]);
 
 
   const workGradientConfig = useMemo(() => ({
