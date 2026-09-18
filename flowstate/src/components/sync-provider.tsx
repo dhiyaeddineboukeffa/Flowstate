@@ -63,8 +63,21 @@ export default function SyncProvider({ children }: { children: React.ReactNode }
               case 'updateUserPomodoroState':
                 await updateUserPomodoroState(op.payload);
                 break;
-              // ... Add more as needed
-            }
+              case 'createChecklistItem':
+                await createChecklistItem(op.payload.subTaskId, op.payload.text);
+                break;
+              case 'toggleChecklistItem':
+                await toggleChecklistItem(op.payload.id, op.payload.done);
+                break;
+              case 'deleteChecklistItem':
+                await deleteChecklistItem(op.payload);
+                break;
+              case 'updateSessionNotes':
+                await updateSessionNotes(op.payload.id, op.payload.notes);
+                break;
+              case 'updateParentTaskNotes':
+                await updateParentTaskNotes(op.payload.id, op.payload.notes);
+                break;
           } catch (err) {
             console.error("Failed to sync operation:", op, err);
             // We could optionally break here and leave it in the queue to retry

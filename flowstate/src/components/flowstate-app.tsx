@@ -413,7 +413,7 @@ export default function FlowStateApp({
         : p
     ));
 
-    await createChecklistItem(view.sub.id, text);
+    store.pushSyncOperation("createChecklistItem", { subTaskId: view.sub.id, text });
     refresh();
   };
 
@@ -510,11 +510,11 @@ export default function FlowStateApp({
         }));
         
         // Fire-and-forget DB update
-        if (newNotesStr) updateSessionNotes(currentSessionId, newNotesStr);
+        if (newNotesStr) store.pushSyncOperation("updateSessionNotes", { id: currentSessionId, notes: newNotesStr });
       }
     }
 
-    await toggleChecklistItem(itemId, isNowDone);
+    store.pushSyncOperation("toggleChecklistItem", { id: itemId, done: isNowDone });
     refresh();
   };
 
@@ -528,7 +528,7 @@ export default function FlowStateApp({
         : p
     ));
 
-    await deleteChecklistItem(itemId);
+    store.pushSyncOperation("deleteChecklistItem", itemId);
     refresh();
   };
 
@@ -1095,11 +1095,14 @@ export default function FlowStateApp({
     if (typeof window === "undefined") return;
 
     let worker: Worker | null = null;
+    let hasAutoStopped = false; // Fast-path local flag to prevent flood loops on wakeup
     
     try {
       worker = new Worker("/timer-worker.js");
       
       worker.onmessage = (e) => {
+        if (hasAutoStopped) return; // Drop all subsequent backlog messages for this phase!
+
         if (e.data === 'tick') {
           const now = new Date();
           setCurrentTime(now);
@@ -1125,6 +1128,7 @@ export default function FlowStateApp({
                 }
                 
                 if (shouldStopAll) {
+                  hasAutoStopped = true;
                   playNotification();
                   
                   const newCompleted = pomodorosCompleted + 1;
@@ -1144,6 +1148,7 @@ export default function FlowStateApp({
                 const elapsed = Math.floor((now.getTime() - new Date(breakStartTime).getTime()) / 1000);
                 const target = (pomodoroPhase === "long_break" ? longBreakDuration : shortBreakDuration) * 60;
                 if (elapsed >= target) {
+                  hasAutoStopped = true;
                   playNotification();
                   setPomodoroPhase("work");
                   setBreakStartTime(null);
