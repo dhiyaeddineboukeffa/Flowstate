@@ -851,11 +851,12 @@ export default function FlowStateApp({
           last_paused_at: null,
           accumulated_paused_time: 0
         };
-        setActiveSessions(prev => [...prev, fakeSession as any]);
-        setIsPaused(false);
+        startTransition(() => {
+          setActiveSessions(prev => [...prev, fakeSession as any]);
+          setIsPaused(false);
+          store.pushSyncOperation("startSession", { subTaskId: subTaskId, sessionId: fakeSession.id });
+        });
         setIsProcessing(false);
-        
-        store.pushSyncOperation("startSession", { subTaskId: subTaskId });
         refresh();
       }
     }
@@ -866,7 +867,6 @@ export default function FlowStateApp({
     setIsStartingIntent(true);
     
     try {
-      // If user selected an existing task, navigate to it directly
       if (selectedExistingTask) {
         setPomodoroMode(mode === "pomodoro");
         setIntentPromptOpen(false);
@@ -879,23 +879,17 @@ export default function FlowStateApp({
 
       if (!intentValue.trim()) return;
 
-      // 1. Find or create "Inbox"
       let inbox = tasks.find(t => t.name.toLowerCase() === "inbox");
       if (!inbox) {
-        
-    const inboxId = uuidv4();
-    const newInbox = { id: inboxId, name: "Inbox", subTasks: [], user_id: null, general_notes: null, total_cumulative_time: 0, created_at: new Date() } as FullParentTask;
-    store.pushSyncOperation("createParentTask", { name: "Inbox", id: inboxId });
-
+        const inboxId = uuidv4();
+        const newInbox = { id: inboxId, name: "Inbox", subTasks: [], user_id: null, general_notes: null, total_cumulative_time: 0, created_at: new Date() } as FullParentTask;
+        store.pushSyncOperation("createParentTask", { name: "Inbox", id: inboxId });
         inbox = newInbox;
-        // Optimistic update to prevent being kicked out by the sync useEffect
         setTasks(prev => [...prev, newInbox]);
       }
       
-      // 2. Create subtask
       const subtaskId = uuidv4(); const subtask = { id: subtaskId, parent_task_id: inbox.id, name: intentValue.trim(), checklists: [], total_cumulative_time: 0, created_at: new Date() } as FullSubTask; store.pushSyncOperation("createSubTask", { parentId: inbox.id, name: intentValue.trim(), id: subtaskId });
       
-      // Optimistic update
       setTasks(prev => prev.map(p => {
         if (p.id === inbox.id) {
           return { ...p, subTasks: [...p.subTasks, { ...subtask, checklists: [] }] };
@@ -903,15 +897,11 @@ export default function FlowStateApp({
         return p;
       }));
       
-      // 3. Set mode
       setPomodoroMode(mode === "pomodoro");
-      
-      // 4. Update UI
       setIntentPromptOpen(false);
       setIntentValue("");
       setView({ kind: "timer", parent: inbox, sub: subtask });
       
-      // 5. Start timer using the robust conflict-handling function
       await handleStartTimer(subtask.id);
       
     } catch (e) {
@@ -922,10 +912,12 @@ export default function FlowStateApp({
   };
 
   const handleStartWithPause = async () => {
-    setActiveSessions([]);
-    for (const s of activeSessions) store.pushSyncOperation("stopSession", s.id);
-    if (pendingSubTaskId) store.pushSyncOperation("startSession", { subTaskId: pendingSubTaskId });
-    setConflictModalOpen(false);
+    startTransition(() => {
+      setActiveSessions([]);
+      for (const s of activeSessions) store.pushSyncOperation("stopSession", s.id);
+      if (pendingSubTaskId) store.pushSyncOperation("startSession", { subTaskId: pendingSubTaskId, sessionId: "temp-" + Date.now() });
+      setConflictModalOpen(false);
+    });
     refresh();
   };
 
@@ -942,10 +934,12 @@ export default function FlowStateApp({
         last_paused_at: null,
         accumulated_paused_time: 0
       };
-      setActiveSessions(prev => [...prev, fakeSession as any]);
-      store.pushSyncOperation("startSession", { subTaskId: pendingSubTaskId });
+      startTransition(() => {
+        setActiveSessions(prev => [...prev, fakeSession as any]);
+        store.pushSyncOperation("startSession", { subTaskId: pendingSubTaskId, sessionId: fakeSession.id });
+        setConflictModalOpen(false);
+      });
     }
-    setConflictModalOpen(false);
     refresh();
   };
   const stoppingRef = useRef<Set<string>>(new Set());
@@ -955,7 +949,6 @@ export default function FlowStateApp({
     stoppingRef.current.add(sessionId);
 
     setIsProcessing(true);
-    setIsPaused(false);
     
     const sessionToStop = activeSessions.find(s => s.id === sessionId);
     if (sessionToStop) {
@@ -976,66 +969,74 @@ export default function FlowStateApp({
         last_paused_at: null
       };
 
-      setActiveSessions(prev => prev.filter(s => s.id !== sessionId));
-      setTodaySessions(prev => [stoppedSession as any, ...prev]);
-      setSubTaskHistory(prev => {
-        if (view.kind === "timer" && view.sub.id === sessionToStop.sub_task_id) {
-          return [stoppedSession as any, ...prev];
-        }
-        return prev;
-      });
-
-      setTasks(prevTasks => prevTasks.map(pt => {
-        let updatedPt = false;
-        const newSubTasks = pt.subTasks?.map(st => {
-          if (st.id === sessionToStop.sub_task_id) {
-            updatedPt = true;
-            return { ...st, total_cumulative_time: (st.total_cumulative_time || 0) + duration };
+      startTransition(() => {
+        setIsPaused(false);
+        setActiveSessions(prev => prev.filter(s => s.id !== sessionId));
+        setTodaySessions(prev => [stoppedSession as any, ...prev]);
+        setSubTaskHistory(prev => {
+          if (view.kind === "timer" && view.sub.id === sessionToStop.sub_task_id) {
+            return [stoppedSession as any, ...prev];
           }
-          return st;
+          return prev;
         });
-        if (updatedPt) {
-          return { ...pt, total_cumulative_time: (pt.total_cumulative_time || 0) + duration, subTasks: newSubTasks };
+
+        setTasks(prevTasks => prevTasks.map(pt => {
+          let updatedPt = false;
+          const newSubTasks = pt.subTasks?.map(st => {
+            if (st.id === sessionToStop.sub_task_id) {
+              updatedPt = true;
+              return { ...st, total_cumulative_time: (st.total_cumulative_time || 0) + duration };
+            }
+            return st;
+          });
+          if (updatedPt) {
+            return { ...pt, total_cumulative_time: (pt.total_cumulative_time || 0) + duration, subTasks: newSubTasks };
+          }
+          return pt;
+        }));
+        
+        store.pushSyncOperation("stopSession", sessionId);
+        
+        if (pomodoroMode) {
+          if (!autoPomodoroTransition) {
+            setPomodoroPhase("work");
+            setBreakStartTime(null);
+            setPomodoroAccumulated(0);
+          }
         }
-        return pt;
-      }));
+      });
     }
     
-    store.pushSyncOperation("stopSession", sessionId);
-    
-    if (pomodoroMode) {
-      if (!autoPomodoroTransition) {
-        setPomodoroPhase("work");
-        setBreakStartTime(null);
-        setPomodoroAccumulated(0);
-      }
-    }
     setIsProcessing(false);
     refresh();
   };
 
   const handlePauseTimer = async (sessionId: string) => {
-    setIsPaused(true);
-    setActiveSessions(prev => prev.map(s => s.id === sessionId ? { ...s, is_paused: true, last_paused_at: new Date() } : s));
-    store.pushSyncOperation("pauseSession", sessionId);
+    startTransition(() => {
+      setIsPaused(true);
+      setActiveSessions(prev => prev.map(s => s.id === sessionId ? { ...s, is_paused: true, last_paused_at: new Date() } : s));
+      store.pushSyncOperation("pauseSession", sessionId);
+    });
     refresh();
   };
 
   const handleResumeTimer = async (sessionId: string) => {
-    setIsPaused(false);
-    setActiveSessions(prev => prev.map(s => {
-      if (s.id === sessionId && s.is_paused && s.last_paused_at) {
-        const pausedDuration = Math.round((new Date().getTime() - new Date(s.last_paused_at).getTime()) / 1000);
-        return { 
-          ...s, 
-          is_paused: false, 
-          last_paused_at: null,
-          accumulated_paused_time: (s.accumulated_paused_time || 0) + pausedDuration
-        };
-      }
-      return s;
-    }));
-    store.pushSyncOperation("resumeSession", sessionId);
+    startTransition(() => {
+      setIsPaused(false);
+      setActiveSessions(prev => prev.map(s => {
+        if (s.id === sessionId && s.is_paused && s.last_paused_at) {
+          const pausedDuration = Math.round((new Date().getTime() - new Date(s.last_paused_at).getTime()) / 1000);
+          return { 
+            ...s, 
+            is_paused: false, 
+            last_paused_at: null,
+            accumulated_paused_time: (s.accumulated_paused_time || 0) + pausedDuration
+          };
+        }
+        return s;
+      }));
+      store.pushSyncOperation("resumeSession", sessionId);
+    });
     refresh();
   };
 
