@@ -1021,12 +1021,39 @@ export default function FlowStateApp({
   const submitEditSession = async () => {
     if (!editingSession || !editStartTime || !editDurationStr) return;
     const end = editEndTime ? new Date(editEndTime) : null;
+    const newStart = new Date(editStartTime);
+    const newDuration = parseInt(editDurationStr, 10);
+    
     try {
-      await updateSessionTime(editingSession.id, new Date(editStartTime), end, parseInt(editDurationStr, 10));
+      store.pushSyncOperation("updateSessionTime", { 
+        sessionId: editingSession.id, 
+        startTime: newStart.toISOString(), 
+        endTime: end ? end.toISOString() : null, 
+        duration: newDuration 
+      });
+      
+      // Optimistically update todaySessions
+      setTodaySessions(prev => prev.map(s => {
+        if (s.id === editingSession.id) {
+          return { ...s, start_time: newStart, end_time: end, duration: newDuration };
+        }
+        return s;
+      }));
+      
+      // Optimistically update subTaskHistory
+      setSubTaskHistory(prev => prev.map(s => {
+        if (s.id === editingSession.id) {
+          return { ...s, start_time: newStart, end_time: end, duration: newDuration };
+        }
+        return s;
+      }));
+
       toast.success("Session updated");
       setEditSessionOpen(false);
-  
-    } catch { toast.error("Failed to update session"); }
+      setEditingSession(null);
+    } catch (e) {
+      toast.error("Failed to update session.");
+    }
   };
 
   // ─── Derived ─────────────────────────────────────────────────────────────

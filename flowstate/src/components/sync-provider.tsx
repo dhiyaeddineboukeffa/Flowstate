@@ -7,7 +7,7 @@ import {
   deleteParentTask, deleteSubTask, deleteSession, startSession,
   stopSession, pauseSession, resumeSession, createChecklistItem,
   toggleChecklistItem, deleteChecklistItem, updateUserPomodoroState,
-  updateParentTaskNotes, updateSessionNotes
+  updateParentTaskNotes, updateSessionNotes, updateSessionTime
 } from "@/lib/actions";
 import { toast } from "sonner";
 
@@ -77,6 +77,9 @@ export default function SyncProvider({ children }: { children: React.ReactNode }
                 break;
               case 'updateParentTaskNotes':
                 await updateParentTaskNotes(op.payload.id, op.payload.notes);
+                break;
+              case 'updateSessionTime':
+                await updateSessionTime(op.payload.sessionId, new Date(op.payload.startTime), op.payload.endTime ? new Date(op.payload.endTime) : null, op.payload.duration);
                 break;
             }
           } catch (err) {
