@@ -151,6 +151,7 @@ export interface AnimatedGradientProps {
     radius?: string;
     style?: CSSProperties;
     className?: string;
+    active?: boolean;
 }
 
 export function AnimatedGradient({
@@ -159,6 +160,7 @@ export function AnimatedGradient({
     radius = "0px",
     style,
     className,
+    active = true,
 }: AnimatedGradientProps) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -332,10 +334,14 @@ export function AnimatedGradient({
                 );
 
                 gl.drawArrays(gl.TRIANGLES, 0, 6);
-                frameIdRef.current = requestAnimationFrame(animate);
+                if (active) {
+                    frameIdRef.current = requestAnimationFrame(animate);
+                }
             };
 
-            frameIdRef.current = requestAnimationFrame(animate);
+            if (active) {
+                frameIdRef.current = requestAnimationFrame(animate);
+            }
 
             return () => {
                 if (frameIdRef.current !== undefined) {
@@ -347,11 +353,11 @@ export function AnimatedGradient({
                 gl.deleteShader(fragmentShader);
                 gl.deleteBuffer(positionBuffer);
             };
-        } catch {
+        } catch (error) {
+            console.error("WebGL Initialization Error:", error);
             setHasWebGLError(true);
-            return;
         }
-    }, [hasWebGLError, isMounted, params, isMobile]);
+    }, [hasWebGLError, isMounted, params, isMobile, active]);
 
     if (hasWebGLError || isMobile) {
         return <WebGLFallback className={cn("absolute inset-0 overflow-hidden", className)} />;

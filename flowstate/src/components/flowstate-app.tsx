@@ -1201,11 +1201,13 @@ export default function FlowStateApp({
   return (
     <div className="relative min-h-[100dvh] w-full bg-transparent text-foreground isolate">
       <AnimatedGradient 
-        config={workGradientConfig}
+        config={workGradientConfig as any}
+        active={pomodoroPhase === "work"}
         className={`fixed inset-0 z-[-1] transition-opacity duration-[5000ms] ease-in-out pointer-events-none ${pomodoroPhase === "work" ? (theme === "light" ? "opacity-100" : "opacity-30") : "opacity-0"}`}
       />
       <AnimatedGradient 
-        config={breakGradientConfig}
+        config={breakGradientConfig as any}
+        active={pomodoroPhase !== "work"}
         className={`fixed inset-0 z-[-1] transition-opacity duration-[5000ms] ease-in-out pointer-events-none ${pomodoroPhase !== "work" ? (theme === "light" ? "opacity-100" : "opacity-30") : "opacity-0"}`}
       />
 
